@@ -3,7 +3,7 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #05060a;
+  background: #8fb6e8;
   color: white;
   font-family: system-ui, Arial, sans-serif;
 }
@@ -34,7 +34,7 @@ canvas { display: block; }
   padding: 10px 12px;
   border-radius: 8px;
   background: rgba(0,0,0,.55);
-  color: #ddd;
+  color: #fff;
   z-index: 10;
   font-size: 13px;
   line-height: 1.45;
@@ -47,10 +47,51 @@ canvas { display: block; }
   padding: 14px 18px;
   border: 1px solid rgba(255,255,255,.75);
   border-radius: 8px;
-  background: rgba(0,0,0,.78);
+  background: rgba(0,0,0,.72);
   color: white;
   z-index: 20;
   font: 16px system-ui, Arial;
   text-align: center;
   max-width: 80vw;
 }
+#arenaControls {
+  position: fixed;
+  top: 78px;
+  left: 16px;
+  width: 250px;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(0,0,0,.55);
+  color: #fff;
+  z-index: 11;
+  font-size: 13px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.25);
+}
+#arenaControls b { display: block; margin-bottom: 8px; }
+#arenaControls label {
+  display: grid;
+  grid-template-columns: 62px 1fr 38px;
+  gap: 8px;
+  align-items: center;
+  margin: 7px 0;
+}
+#arenaControls input { width: 100%; }
+#arenaControls span { text-align: right; font-variant-numeric: tabular-nums; }
+#replayBtn {
+  display: none;
+  position: fixed;
+  left: 50%;
+  top: 52%;
+  transform: translate(-50%, -50%);
+  z-index: 30;
+  padding: 14px 34px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #ffcc33;
+  color: #171100;
+  font-size: 22px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 8px 30px rgba(0,0,0,.45);
+}
+#replayBtn:hover { filter: brightness(1.08); }
