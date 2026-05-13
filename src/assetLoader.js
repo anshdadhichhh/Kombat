@@ -42,38 +42,45 @@ export class AssetLoader {
     const object = await this.loadObject(url);
     const rawClip = object.animations?.[0];
     if (!rawClip) throw new Error(`No animation clip found in ${url}`);
-    const clip = removeRootMotion(rawClip, { keepVertical: false });
+
+    // Preserve animation fidelity. Only locomotion root X/Z is cleaned; idle/attacks/hits/KO are untouched.
+    const clip = sanitizeClipForFighter(rawClip, clipName);
     clip.name = clipName;
     return clip;
   }
 }
 
-// Fighting games should move the controller object with physics, not animation root motion.
-// This strips FBX root/hip translation tracks so walk/punch/jump clips don't pull the mesh back to origin.
-export function removeRootMotion(clip, { keepVertical = false } = {}) {
-  const rootNames = ['Root', 'Armature', 'Hips', 'mixamorigHips', 'mixamorig: Hips', 'Bip001', 'Pelvis'];
-  const cleanedTracks = [];
+function isLocomotionClip(name = '') {
+  return /walk|run|step|move|forward|back/i.test(name);
+}
 
-  for (const track of clip.tracks) {
-    const isPositionTrack = track.name.endsWith('.position');
-    const isRootLike = track.name === '.position' || rootNames.some((name) => track.name.includes(name));
+// Previous version stripped Hips/Pelvis from ALL clips, making idle/combat look sloppy.
+// This version only touches top-level Root/Armature horizontal travel for walk/step clips.
+export function sanitizeClipForFighter(clip, semanticName = '') {
+  if (!isLocomotionClip(semanticName) && !isLocomotionClip(clip.name)) return clip.clone();
 
-    if (!isPositionTrack || !isRootLike) {
-      cleanedTracks.push(track.clone());
-      continue;
-    }
-
-    if (!keepVertical) continue;
+  const rootLike = /(^|[.:/])(root|armature|scene)$/i;
+  const hipsLike = /hips|pelvis/i;
+  const cleanedTracks = clip.tracks.map((track) => {
+    if (!track.name.endsWith('.position')) return track.clone();
+    if (hipsLike.test(track.name)) return track.clone();
+    if (!rootLike.test(track.name) && track.name !== '.position') return track.clone();
 
     const cloned = track.clone();
-    for (let i = 0; i < cloned.values.length; i += 3) {
-      cloned.values[i + 0] = cloned.values[0];
-      cloned.values[i + 2] = cloned.values[2];
+    const v = cloned.values;
+    const x0 = v[0];
+    const z0 = v[2];
+    for (let i = 0; i < v.length; i += 3) {
+      v[i + 0] = x0;
+      // preserve Y bob/height
+      v[i + 2] = z0;
     }
-    cleanedTracks.push(cloned);
-  }
+    return cloned;
+  });
 
-  return new THREE.AnimationClip(`${clip.name || 'clip'}_inPlace`, clip.duration, cleanedTracks);
+  const out = new THREE.AnimationClip(`${clip.name || semanticName}_inPlace`, clip.duration, cleanedTracks);
+  out.optimize();
+  return out;
 }
 
 export function makeFallbackFighter(color = 0x3388ff) {
@@ -94,7 +101,6 @@ export function makeFallbackFighter(color = 0x3388ff) {
   lHand.position.set(-0.42, 1.25, 0.02);
   rHand.position.set(0.42, 1.25, 0.02);
   group.add(body, head, lHand, rHand);
-  group.userData.fallbackHands = { lHand, rHand };
   return group;
 }
 
@@ -115,10 +121,7 @@ export function normalizeObject(object, targetHeight = 2.0) {
   const box = new THREE.Box3().setFromObject(object);
   const size = new THREE.Vector3();
   box.getSize(size);
-  if (size.y > 0.001) {
-    const scale = targetHeight / size.y;
-    object.scale.multiplyScalar(scale);
-  }
+  if (size.y > 0.001) object.scale.multiplyScalar(targetHeight / size.y);
 
   object.updateMatrixWorld(true);
   const fixedBox = new THREE.Box3().setFromObject(object);
