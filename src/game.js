@@ -5,11 +5,7 @@ import { KeyboardInput, P1_BINDINGS, P2_BINDINGS } from './input.js';
 import { AIInput } from './aiInput.js';
 import { VFXSystem } from './vfx.js';
 
-const NEUTRAL_INPUT = {
-  isDown: () => false,
-  wasPressed: () => false,
-  endFrame: () => {}
-};
+const NEUTRAL_INPUT = { isDown: () => false, wasPressed: () => false, endFrame: () => {} };
 
 export class FightingGame {
   constructor(container = document.body) {
@@ -27,14 +23,13 @@ export class FightingGame {
     this.arenaBaseScale = new THREE.Vector3(1, 1, 1);
     this.arenaBasePosition = new THREE.Vector3(0, 0, 0);
     this.selectedArena = 'arena1.glb';
-
     this.fixedCamera = true;
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x8fb6e8);
-    this.scene.fog = new THREE.Fog(0x8fb6e8, 18, 42);
+    this.scene.fog = new THREE.Fog(0x8fb6e8, 80, 260);
 
-    this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.05, 1000);
     this.camera.position.set(0, 3.2, 11.0);
     this.camera.lookAt(0, 1.15, 0);
 
@@ -44,7 +39,6 @@ export class FightingGame {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     this.renderer.shadowMap.enabled = false;
     this.container.appendChild(this.renderer.domElement);
-
     this.vfx = new VFXSystem(this.scene);
 
     window.addEventListener('resize', () => this.onResize());
@@ -59,12 +53,11 @@ export class FightingGame {
     this.makeFallbackArena();
     this.showLoading('Loading fighters and arena...');
     this.animate();
-
     try {
       await Promise.all([this.loadArena(), this.loadFighters()]);
       this.assetsReady = true;
       this.hideLoading();
-      console.log('Game ready. Arena supports arena1.glb and arena2.glb. Jump uses Jumping.fbx.');
+      console.log('Game ready. arena1.glb/arena2.glb supported. Animations preserved; only locomotion root X/Z is cleaned.');
     } catch (err) {
       console.error('Game asset load failed:', err);
       this.showLoading(`Asset load failed. Check console. ${err.message || err}`);
@@ -72,19 +65,12 @@ export class FightingGame {
   }
 
   addEnvironment() {
-    const back = new THREE.Mesh(
-      new THREE.PlaneGeometry(80, 40),
-      new THREE.MeshBasicMaterial({ color: 0x8fb6e8, depthWrite: false })
-    );
-    back.position.set(0, 12, -18);
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(400, 200), new THREE.MeshBasicMaterial({ color: 0x8fb6e8, depthWrite: false }));
+    back.position.set(0, 40, -120);
     this.scene.add(back);
-
-    const base = new THREE.Mesh(
-      new THREE.PlaneGeometry(80, 80),
-      new THREE.MeshStandardMaterial({ color: 0x6f7f90, roughness: 0.9, metalness: 0.0 })
-    );
+    const base = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x6f7f90, roughness: 0.9 }));
     base.rotation.x = -Math.PI / 2;
-    base.position.y = -0.16;
+    base.position.y = -0.55;
     this.scene.add(base);
   }
 
@@ -96,7 +82,7 @@ export class FightingGame {
     const fill = new THREE.DirectionalLight(0xdde8ff, 1.6);
     fill.position.set(5, 4, 5);
     this.scene.add(fill);
-    const front = new THREE.PointLight(0xffffff, 1.4, 22);
+    const front = new THREE.PointLight(0xffffff, 1.4, 60);
     front.position.set(0, 3, 6);
     this.scene.add(front);
   }
@@ -105,16 +91,14 @@ export class FightingGame {
     const select = document.getElementById('arenaSelect');
     const name = requestedName || select?.value || this.selectedArena || 'arena1.glb';
     this.selectedArena = name;
-
-    const arenaUrls = [
+    const uniqueUrls = [...new Set([
       `/assets/arena/${name}`,
       '/assets/arena/arena1.glb',
       '/assets/arena/arena2.glb',
       '/assets/arena/arena.glb',
       '/assets/arena/arena.gltf',
       '/assets/arena/arena.fbx'
-    ];
-    const uniqueUrls = [...new Set(arenaUrls)];
+    ])];
 
     for (const url of uniqueUrls) {
       try {
@@ -127,7 +111,6 @@ export class FightingGame {
         console.warn(`Arena not loaded from ${url}`, err.message || err);
       }
     }
-
     console.warn('No arena1.glb / arena2.glb / arena.glb / arena.fbx found. Keeping fallback arena.');
     this.loadedArena = this.fallbackArena;
     this.captureArenaBaseTransform(this.fallbackArena);
@@ -142,7 +125,7 @@ export class FightingGame {
     this.captureArenaBaseTransform(arenaObject);
     this.applyArenaSliders();
     if (this.fallbackArena) this.fallbackArena.visible = false;
-    this.vfx?.spawnFlash(new THREE.Vector3(0, 1.2, 0), 0x99ccff, 2.4, 0.35);
+    this.vfx?.spawnFlash(new THREE.Vector3(0, 1.2, 0), 0x99ccff, 1.2, 0.18);
   }
 
   fitArenaToStage(object) {
@@ -153,43 +136,37 @@ export class FightingGame {
         child.frustumCulled = false;
         if (child.material) {
           const mats = Array.isArray(child.material) ? child.material : [child.material];
-          mats.forEach((m) => {
-            if ('color' in m && m.color?.getHex?.() === 0x000000) m.color.set(0x777777);
-          });
+          mats.forEach((m) => { if ('color' in m && m.color?.getHex?.() === 0x000000) m.color.set(0x777777); });
         }
       }
     });
-
     object.updateMatrixWorld(true);
     let box = new THREE.Box3().setFromObject(object);
     const size = new THREE.Vector3();
     const center = new THREE.Vector3();
     box.getSize(size);
     box.getCenter(center);
-
     object.position.x -= center.x;
     object.position.z -= center.z;
     object.position.y -= box.min.y;
-
     const targetWidth = 16;
     const targetDepth = 7;
     const scaleX = size.x > 0.001 ? targetWidth / size.x : 1;
     const scaleZ = size.z > 0.001 ? targetDepth / size.z : 1;
-    const scale = Math.min(scaleX, scaleZ, 3.0);
-    object.scale.multiplyScalar(scale);
+    object.scale.multiplyScalar(Math.min(scaleX, scaleZ, 3.0));
+    this.groundObject(object, 0);
+  }
 
+  groundObject(object, groundY = 0) {
     object.updateMatrixWorld(true);
-    box = new THREE.Box3().setFromObject(object);
-    object.position.y -= box.min.y;
+    const box = new THREE.Box3().setFromObject(object);
+    object.position.y += groundY - box.min.y;
   }
 
   makeFallbackArena() {
     this.fallbackArena = new THREE.Group();
     this.fallbackArena.name = 'FallbackArena';
-    const floor = new THREE.Mesh(
-      new THREE.BoxGeometry(18, 0.2, 7),
-      new THREE.MeshStandardMaterial({ color: 0x596675, metalness: 0.1, roughness: 0.45 })
-    );
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(18, 0.2, 7), new THREE.MeshStandardMaterial({ color: 0x596675, roughness: 0.45 }));
     floor.position.y = -0.1;
     this.fallbackArena.add(floor);
     const grid = new THREE.GridHelper(18, 18, 0xffdd77, 0x8794a5);
@@ -203,8 +180,7 @@ export class FightingGame {
   setupArenaSliders() {
     ['arenaScale', 'arenaX', 'arenaY', 'arenaZ'].forEach((id) => {
       const el = document.getElementById(id);
-      if (!el) return;
-      el.addEventListener('input', () => this.applyArenaSliders());
+      if (el) el.addEventListener('input', () => this.applyArenaSliders());
     });
   }
 
@@ -242,8 +218,13 @@ export class FightingGame {
     const x = this.sliderNumber('arenaX', 0);
     const y = this.sliderNumber('arenaY', 0);
     const z = this.sliderNumber('arenaZ', 0);
+
     object.scale.copy(this.arenaBaseScale).multiplyScalar(scale);
-    object.position.copy(this.arenaBasePosition).add(new THREE.Vector3(x, y, z));
+    object.position.copy(this.arenaBasePosition).add(new THREE.Vector3(x, 0, z));
+    // Re-ground after every scale so the bottom does not disappear below the floor. Then apply user Y offset.
+    this.groundObject(object, 0);
+    object.position.y += y;
+
     this.setSliderLabel('arenaScaleValue', scale.toFixed(2));
     this.setSliderLabel('arenaXValue', x.toFixed(1));
     this.setSliderLabel('arenaYValue', y.toFixed(1));
@@ -256,18 +237,8 @@ export class FightingGame {
   }
 
   async loadFighters() {
-    this.p1 = new Fighter({
-      id: 'P1', color: 0x2f7dff, startX: -2.4,
-      modelUrl: '/assets/characters/player1/character.fbx',
-      animationBaseUrl: '/assets/characters/player1',
-      bindings: P1_BINDINGS, assetLoader: this.loader, vfx: this.vfx
-    });
-    this.p2 = new Fighter({
-      id: 'P2-AI', color: 0xff374f, startX: 2.4,
-      modelUrl: '/assets/characters/player2/character.fbx',
-      animationBaseUrl: '/assets/characters/player2',
-      bindings: P2_BINDINGS, assetLoader: this.loader, isAI: true, vfx: this.vfx
-    });
+    this.p1 = new Fighter({ id: 'P1', color: 0x2f7dff, startX: -2.4, modelUrl: '/assets/characters/player1/character.fbx', animationBaseUrl: '/assets/characters/player1', bindings: P1_BINDINGS, assetLoader: this.loader, vfx: this.vfx });
+    this.p2 = new Fighter({ id: 'P2-AI', color: 0xff374f, startX: 2.4, modelUrl: '/assets/characters/player2/character.fbx', animationBaseUrl: '/assets/characters/player2', bindings: P2_BINDINGS, assetLoader: this.loader, isAI: true, vfx: this.vfx });
     await Promise.all([this.p1.load(), this.p2.load()]);
     this.scene.add(this.p1.group, this.p2.group);
     this.p1.faceOpponent(this.p2);
@@ -343,8 +314,7 @@ export class FightingGame {
     this.roundOver = false;
     this.p1.health = 100;
     this.p2.health = 100;
-    this.p1.koStarted = false;
-    this.p2.koStarted = false;
+    this.p1.koStarted = this.p2.koStarted = false;
     this.p1.stun = this.p2.stun = 0;
     this.p1.hitStop = this.p2.hitStop = 0;
     this.p1.group.position.set(-2.4, 0, 0);
@@ -359,7 +329,7 @@ export class FightingGame {
     this.p2.faceOpponent(this.p1);
     document.getElementById('roundText').textContent = 'ROUND 1';
     document.getElementById('replayBtn').style.display = 'none';
-    this.vfx.spawnFlash(new THREE.Vector3(0, 1.2, 0), 0xffffff, 2.0, 0.25);
+    this.vfx.spawnFlash(new THREE.Vector3(0, 1.2, 0), 0xffffff, 1.2, 0.18);
     this.updateHud();
   }
 
@@ -372,10 +342,7 @@ export class FightingGame {
     this.loadingEl.textContent = message;
   }
 
-  hideLoading() {
-    this.loadingEl?.remove();
-    this.loadingEl = null;
-  }
+  hideLoading() { this.loadingEl?.remove(); this.loadingEl = null; }
 
   onResize() {
     this.camera.aspect = window.innerWidth / window.innerHeight;
