@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { AssetLoader } from './assetLoader.js';
 import { Fighter } from './fighter.js';
 import { KeyboardInput, P1_BINDINGS, P2_BINDINGS } from './input.js';
@@ -19,9 +20,9 @@ export class FightingGame {
     this.assetsReady = false;
     this.fightStarted = false;
     this.loadedArena = null;
-    this.arenaBaseScale = new THREE.Vector3(1, 1, 1);
-    this.arenaBasePosition = new THREE.Vector3(0, 0, 0);
-    this.arenaBaseRotation = new THREE.Euler(0, 0, 0);
+    this.arenaRoot = null;
+    this.transformControls = null;
+    this.syncingArenaUi = false;
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x87a9c7);
@@ -36,13 +37,18 @@ export class FightingGame {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.15;
     this.container.appendChild(this.renderer.domElement);
 
     this.vfx = new VFXSystem(this.scene, this.camera);
+    this.setupTransformControls();
     window.addEventListener('resize', () => this.onResize());
     this.setupReplayButton();
     this.setupPlayButton();
     this.setupSliders();
+    this.setupTransformButtons();
   }
 
   async init() {
@@ -83,16 +89,37 @@ export class FightingGame {
     this.scene.add(sky);
   }
 
+  setupTransformControls() {
+    this.transformControls = new TransformControls(this.camera, this.renderer.domElement);
+    this.transformControls.setSize(1.15);
+    this.transformControls.setMode('translate');
+    this.transformControls.addEventListener('objectChange', () => this.syncArenaUiFromObject());
+    this.scene.add(this.transformControls);
+  }
+
+  setupTransformButtons() {
+    const modes = { gizmoTranslate: 'translate', gizmoRotate: 'rotate', gizmoScale: 'scale' };
+    Object.entries(modes).forEach(([id, mode]) => {
+      const btn = document.getElementById(id);
+      if (btn) btn.addEventListener('click', () => this.transformControls?.setMode(mode));
+    });
+  }
+
   async loadArenaFromFolder() {
     const files = ['arena.glb', 'arena1.glb', 'arena2.glb', 'arena.gltf', 'arena.fbx'];
     for (const file of files) {
       try {
         const obj = await this.loader.loadObject(`/assets/arena/${file}`);
-        obj.name = `Arena:${file}`;
-        this.prepareArena(obj);
-        this.scene.add(obj);
+        obj.name = `ArenaModel:${file}`;
+        this.prepareArenaModel(obj);
+
+        const root = new THREE.Group();
+        root.name = `ArenaRoot:${file}`;
+        root.add(obj);
+        this.scene.add(root);
+        this.arenaRoot = root;
         this.loadedArena = obj;
-        this.captureArenaBaseTransform(obj);
+        this.transformControls.attach(root);
         this.applyArenaSliders();
         console.log(`Loaded arena from public/assets/arena/${file}`);
         return;
@@ -101,19 +128,29 @@ export class FightingGame {
       }
     }
     console.warn('No arena GLB found in public/assets/arena. Using simple fallback floor.');
-    this.loadedArena = this.makeFallbackFloor();
-    this.captureArenaBaseTransform(this.loadedArena);
+    const floor = this.makeFallbackFloor();
+    const root = new THREE.Group();
+    root.name = 'ArenaRoot:fallback';
+    root.add(floor);
+    this.scene.add(root);
+    this.arenaRoot = root;
+    this.loadedArena = floor;
+    this.transformControls.attach(root);
     this.applyArenaSliders();
   }
 
-  prepareArena(obj) {
+  prepareArenaModel(obj) {
+    const maxAnisotropy = this.renderer.capabilities.getMaxAnisotropy?.() || 1;
     obj.traverse((child) => {
       if (child.isMesh || child.isSkinnedMesh) {
         child.castShadow = true;
         child.receiveShadow = true;
         child.frustumCulled = false;
+        const materials = child.material ? (Array.isArray(child.material) ? child.material : [child.material]) : [];
+        materials.forEach((mat) => this.enhanceMaterial(mat, maxAnisotropy));
       }
     });
+
     obj.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(obj);
     const center = new THREE.Vector3();
@@ -123,18 +160,38 @@ export class FightingGame {
     obj.position.y -= box.min.y;
   }
 
+  enhanceMaterial(mat, maxAnisotropy) {
+    if (!mat) return;
+    if (mat.map) {
+      mat.map.colorSpace = THREE.SRGBColorSpace;
+      mat.map.anisotropy = maxAnisotropy;
+      mat.map.needsUpdate = true;
+    }
+    if (mat.emissiveMap) {
+      mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+      mat.emissiveMap.anisotropy = maxAnisotropy;
+      mat.emissiveMap.needsUpdate = true;
+    }
+    if (mat.normalMap) {
+      mat.normalScale?.set?.(1.35, 1.35);
+      mat.normalMap.anisotropy = maxAnisotropy;
+      mat.normalMap.needsUpdate = true;
+    }
+    if (mat.roughnessMap) {
+      mat.roughnessMap.anisotropy = maxAnisotropy;
+      mat.roughnessMap.needsUpdate = true;
+    }
+    if (mat.aoMap) mat.aoMapIntensity = 1.25;
+    if ('roughness' in mat && mat.roughness === undefined) mat.roughness = 0.78;
+    if ('metalness' in mat && mat.metalness === undefined) mat.metalness = 0.0;
+    mat.needsUpdate = true;
+  }
+
   makeFallbackFloor() {
     const floor = new THREE.Mesh(new THREE.BoxGeometry(22, 0.35, 10), new THREE.MeshStandardMaterial({ color: 0x5c5148, roughness: 0.85 }));
     floor.position.y = -0.18;
     floor.receiveShadow = true;
-    this.scene.add(floor);
     return floor;
-  }
-
-  captureArenaBaseTransform(obj) {
-    this.arenaBaseScale.copy(obj.scale);
-    this.arenaBasePosition.copy(obj.position);
-    this.arenaBaseRotation.copy(obj.rotation);
   }
 
   setupSliders() {
@@ -147,8 +204,8 @@ export class FightingGame {
   num(id, fallback) { const el = document.getElementById(id); return el ? Number.parseFloat(el.value) : fallback; }
 
   applyArenaSliders() {
-    const a = this.loadedArena;
-    if (!a) return;
+    const a = this.arenaRoot;
+    if (!a || this.syncingArenaUi) return;
     const s = this.num('arenaScale', 1);
     const x = this.num('arenaX', 0);
     const y = this.num('arenaY', 0);
@@ -156,9 +213,9 @@ export class FightingGame {
     const rx = this.num('arenaRotX', 0);
     const ry = this.num('arenaRotY', 0);
     const rz = this.num('arenaRotZ', 0);
-    a.scale.copy(this.arenaBaseScale).multiplyScalar(s);
-    a.position.copy(this.arenaBasePosition).add(new THREE.Vector3(x, y, z));
-    a.rotation.set(this.arenaBaseRotation.x + THREE.MathUtils.degToRad(rx), this.arenaBaseRotation.y + THREE.MathUtils.degToRad(ry), this.arenaBaseRotation.z + THREE.MathUtils.degToRad(rz));
+    a.scale.setScalar(s);
+    a.position.set(x, y, z);
+    a.rotation.set(THREE.MathUtils.degToRad(rx), THREE.MathUtils.degToRad(ry), THREE.MathUtils.degToRad(rz));
     this.label('arenaScaleValue', s.toFixed(2));
     this.label('arenaXValue', x.toFixed(1));
     this.label('arenaYValue', y.toFixed(1));
@@ -168,10 +225,25 @@ export class FightingGame {
     this.label('arenaRotZValue', rz.toFixed(0));
   }
 
+  syncArenaUiFromObject() {
+    const a = this.arenaRoot;
+    if (!a) return;
+    this.syncingArenaUi = true;
+    this.setInput('arenaScale', a.scale.x);
+    this.setInput('arenaX', a.position.x);
+    this.setInput('arenaY', a.position.y);
+    this.setInput('arenaZ', a.position.z);
+    this.setInput('arenaRotX', THREE.MathUtils.radToDeg(a.rotation.x));
+    this.setInput('arenaRotY', THREE.MathUtils.radToDeg(a.rotation.y));
+    this.setInput('arenaRotZ', THREE.MathUtils.radToDeg(a.rotation.z));
+    this.syncingArenaUi = false;
+    this.applyArenaSliders();
+  }
+
+  setInput(id, value) { const el = document.getElementById(id); if (el) el.value = String(value); }
   label(id, value) { const el = document.getElementById(id); if (el) el.textContent = value; }
 
   async loadFighters() {
-    // Human/P1 LEFT, AI/P2 RIGHT.
     this.p1 = new Fighter({ id: 'P1-LEFT', color: 0x2f7dff, startX: -2.6, modelUrl: '/assets/characters/player1/character.fbx', animationBaseUrl: '/assets/characters/player1', bindings: P1_BINDINGS, assetLoader: this.loader, vfx: this.vfx });
     this.p2 = new Fighter({ id: 'AI-RIGHT', color: 0xff374f, startX: 2.6, modelUrl: '/assets/characters/player2/character.fbx', animationBaseUrl: '/assets/characters/player2', bindings: P2_BINDINGS, assetLoader: this.loader, isAI: true, vfx: this.vfx });
     await Promise.all([this.p1.load(), this.p2.load()]);
