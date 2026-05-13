@@ -16,6 +16,7 @@ export class Fighter {
     this.assetLoader = assetLoader;
     this.isAI = isAI;
     this.vfx = vfx;
+    this.startX = startX;
 
     this.group = new THREE.Group();
     this.group.position.set(startX, 0, 0);
@@ -47,6 +48,9 @@ export class Fighter {
     this.currentAction = null;
     this.currentActionName = null;
     this.animationsReady = false;
+    this.visualBaseScale = new THREE.Vector3(1, 1, 1);
+    this.visualBasePosition = new THREE.Vector3(0, 0, 0);
+    this.visualOffset = { scale: 1, y: 0, z: 0 };
   }
 
   async load() {
@@ -62,18 +66,20 @@ export class Fighter {
 
     this.visual = visual;
     this.group.add(visual);
+    this.visualBaseScale.copy(visual.scale);
+    this.visualBasePosition.copy(visual.position);
     this.mixer = new THREE.AnimationMixer(visual);
 
-    await this.loadAnimationEntry('idle');
+    // IMPORTANT: wait for every configured animation before enabling PLAY.
+    await this.loadAllAnimations();
+    this.animationsReady = true;
     this.play('idle', 0.05, true, true);
-    this.loadRemainingAnimations().catch((err) => console.warn(`[${this.id}] Background animation loading failed`, err));
+    console.log(`[${this.id}] ALL animations loaded; ready.`);
   }
 
-  async loadRemainingAnimations() {
-    const names = Object.keys(DEFAULT_ANIMATION_MAP).filter((name) => name !== 'idle');
+  async loadAllAnimations() {
+    const names = Object.keys(DEFAULT_ANIMATION_MAP);
     await Promise.all(names.map((name) => this.loadAnimationEntry(name)));
-    this.animationsReady = true;
-    console.log(`[${this.id}] All available animations loaded.`);
   }
 
   async loadAnimationEntry(name) {
@@ -102,6 +108,13 @@ export class Fighter {
     if (name === 'idle' && !this.actions.has('idle')) console.error(`[${this.id}] Idle animation not loaded: ${base}/Idle.fbx`);
   }
 
+  applyVisualTransform({ scale = 1, y = 0, z = 0 } = {}) {
+    this.visualOffset = { scale, y, z };
+    if (!this.visual) return;
+    this.visual.scale.copy(this.visualBaseScale).multiplyScalar(scale);
+    this.visual.position.copy(this.visualBasePosition).add(new THREE.Vector3(0, y, z));
+  }
+
   pickAction(name) {
     const entry = this.actions.get(name);
     if (!Array.isArray(entry)) return entry;
@@ -112,6 +125,7 @@ export class Fighter {
     const next = this.pickAction(name);
     if (!next) return false;
     if (!forceRestart && next === this.currentAction && next.isRunning()) return true;
+    next.paused = false;
     next.reset();
     next.enabled = true;
     next.setEffectiveWeight(1);
@@ -190,7 +204,8 @@ export class Fighter {
       if (this.crouching) {
         this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction * 1.5, dt);
         this.setState(this.blocking ? STATE.BLOCK : STATE.CROUCH);
-        this.play(this.blocking ? 'block' : 'crouch', 0.08);
+        // Hold block/crouch without constantly restarting it. It clamps at the final pose if key stays held.
+        this.play(this.blocking ? 'block' : 'crouch', 0.08, false);
       } else if (Math.abs(this.velocity.x) > 0.08) {
         this.setState(STATE.WALK);
         const movingTowardFacing = Math.sign(this.velocity.x) === this.facing;
@@ -248,8 +263,9 @@ export class Fighter {
     const isBlocking = this.blocking && this.facing === -attacker.facing;
     const damage = isBlocking ? Math.ceil(atk.damage * 0.2) : atk.damage;
     this.health = Math.max(0, this.health - damage);
+    // No forced position pushback. This prevents characters being snapped/pushed back when crossing.
     const dir = Math.sign(this.group.position.x - attacker.group.position.x) || attacker.facing;
-    this.group.position.x += dir * atk.push;
+    this.velocity.x += dir * atk.push * 0.8;
     this.stun = this.health <= 0 ? 0 : (isBlocking ? 0.12 : 0.32);
     this.hitStop = this.health <= 0 ? 0 : 0.035;
     attacker.hitStop = this.health <= 0 ? 0 : 0.025;
