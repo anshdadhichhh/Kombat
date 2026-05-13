@@ -18,8 +18,8 @@ export class AIInput {
     const dist = Math.abs(dx);
     const opponentAttacking = opponent.state === 'attack';
 
-    if (opponentAttacking && dist < 1.8 && Math.random() < 0.08) {
-      this.blockTimer = 0.35;
+    if (opponentAttacking && dist < 1.8 && Math.random() < 0.06) {
+      this.blockTimer = 0.28;
     }
     if (this.blockTimer > 0) {
       this.blockTimer -= dt;
@@ -27,8 +27,7 @@ export class AIInput {
       return;
     }
 
-    // AI is always player2/right-side character. It moves toward P1, but NEVER backs up
-    // when too close. This removes the automatic separation feeling and allows crossing.
+    // AI is player2 on LEFT. It moves toward P1 on RIGHT but never backs up, so it will not separate/push away.
     if (dist > 1.0) {
       if (dx > 0) this.down.add(this.bindings.right);
       else this.down.add(this.bindings.left);
