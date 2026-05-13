@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { AssetLoader } from './assetLoader.js';
 import { Fighter } from './fighter.js';
 import { KeyboardInput, P1_BINDINGS, P2_BINDINGS } from './input.js';
@@ -23,6 +24,7 @@ export class FightingGame {
     this.arenaRoot = null;
     this.transformControls = null;
     this.transformHelper = null;
+    this.orbitControls = null;
     this.syncingArenaUi = false;
     this.skyPlane = null;
 
@@ -45,6 +47,7 @@ export class FightingGame {
     this.container.appendChild(this.renderer.domElement);
 
     this.vfx = new VFXSystem(this.scene, this.camera);
+    this.setupOrbitControls();
     this.setupTransformControls();
     window.addEventListener('resize', () => this.onResize());
     this.setupReplayButton();
@@ -87,24 +90,29 @@ export class FightingGame {
   }
 
   addSkyFallback() {
-    this.skyPlane = new THREE.Mesh(
-      new THREE.PlaneGeometry(300, 140),
-      new THREE.MeshBasicMaterial({ color: 0x91b7d5, depthWrite: false })
-    );
+    this.skyPlane = new THREE.Mesh(new THREE.PlaneGeometry(300, 140), new THREE.MeshBasicMaterial({ color: 0x91b7d5, depthWrite: false }));
     this.skyPlane.position.set(0, 35, -90);
     this.scene.add(this.skyPlane);
   }
 
+  setupOrbitControls() {
+    this.orbitControls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.orbitControls.target.set(0, 1.25, 0);
+    this.orbitControls.enableDamping = true;
+    this.orbitControls.dampingFactor = 0.08;
+    this.orbitControls.screenSpacePanning = true;
+    this.orbitControls.enabled = false;
+    this.orbitControls.update();
+  }
+
   setupBackgroundControls() {
     const file = document.getElementById('backgroundImage');
-    if (file) {
-      file.addEventListener('change', () => {
-        const picked = file.files?.[0];
-        if (!picked) return;
-        const url = URL.createObjectURL(picked);
-        this.setBackgroundImage(url, () => URL.revokeObjectURL(url));
-      });
-    }
+    if (file) file.addEventListener('change', () => {
+      const picked = file.files?.[0];
+      if (!picked) return;
+      const url = URL.createObjectURL(picked);
+      this.setBackgroundImage(url, () => URL.revokeObjectURL(url));
+    });
     const path = document.getElementById('backgroundPath');
     const btn = document.getElementById('loadBackgroundPath');
     if (path && btn) btn.addEventListener('click', () => this.setBackgroundImage(path.value));
@@ -129,8 +137,9 @@ export class FightingGame {
     this.transformControls.setSize(1.15);
     this.transformControls.setMode('translate');
     this.transformControls.addEventListener('objectChange', () => this.syncArenaUiFromObject());
-
-    // Newer Three.js TransformControls is not directly addable; add its Object3D helper.
+    this.transformControls.addEventListener('dragging-changed', (e) => {
+      if (this.orbitControls) this.orbitControls.enabled = !e.value && Boolean(document.getElementById('orbitMode')?.checked);
+    });
     this.transformHelper = this.transformControls.getHelper ? this.transformControls.getHelper() : this.transformControls;
     this.scene.add(this.transformHelper);
   }
@@ -141,6 +150,17 @@ export class FightingGame {
       const btn = document.getElementById(id);
       if (btn) btn.addEventListener('click', () => this.transformControls?.setMode(mode));
     });
+    const orbit = document.getElementById('orbitMode');
+    if (orbit) orbit.addEventListener('change', () => {
+      this.orbitControls.enabled = orbit.checked;
+      this.transformControls.enabled = true;
+    });
+    const resetCam = document.getElementById('resetCamera');
+    if (resetCam) resetCam.addEventListener('click', () => {
+      this.camera.position.set(0, 3.8, 12.5);
+      this.orbitControls.target.set(0, 1.25, 0);
+      this.orbitControls.update();
+    });
   }
 
   async loadArenaFromFolder() {
@@ -150,7 +170,6 @@ export class FightingGame {
         const obj = await this.loader.loadObject(`/assets/arena/${file}`);
         obj.name = `ArenaModel:${file}`;
         this.prepareArenaModel(obj);
-
         const root = new THREE.Group();
         root.name = `ArenaRoot:${file}`;
         root.add(obj);
@@ -188,7 +207,6 @@ export class FightingGame {
         materials.forEach((mat) => this.enhanceMaterial(mat, maxAnisotropy));
       }
     });
-
     obj.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(obj);
     const center = new THREE.Vector3();
@@ -200,25 +218,10 @@ export class FightingGame {
 
   enhanceMaterial(mat, maxAnisotropy) {
     if (!mat) return;
-    if (mat.map) {
-      mat.map.colorSpace = THREE.SRGBColorSpace;
-      mat.map.anisotropy = maxAnisotropy;
-      mat.map.needsUpdate = true;
-    }
-    if (mat.emissiveMap) {
-      mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
-      mat.emissiveMap.anisotropy = maxAnisotropy;
-      mat.emissiveMap.needsUpdate = true;
-    }
-    if (mat.normalMap) {
-      mat.normalScale?.set?.(1.35, 1.35);
-      mat.normalMap.anisotropy = maxAnisotropy;
-      mat.normalMap.needsUpdate = true;
-    }
-    if (mat.roughnessMap) {
-      mat.roughnessMap.anisotropy = maxAnisotropy;
-      mat.roughnessMap.needsUpdate = true;
-    }
+    if (mat.map) { mat.map.colorSpace = THREE.SRGBColorSpace; mat.map.anisotropy = maxAnisotropy; mat.map.needsUpdate = true; }
+    if (mat.emissiveMap) { mat.emissiveMap.colorSpace = THREE.SRGBColorSpace; mat.emissiveMap.anisotropy = maxAnisotropy; mat.emissiveMap.needsUpdate = true; }
+    if (mat.normalMap) { mat.normalScale?.set?.(1.35, 1.35); mat.normalMap.anisotropy = maxAnisotropy; mat.normalMap.needsUpdate = true; }
+    if (mat.roughnessMap) { mat.roughnessMap.anisotropy = maxAnisotropy; mat.roughnessMap.needsUpdate = true; }
     if (mat.aoMap) mat.aoMapIntensity = 1.25;
     if ('roughness' in mat && mat.roughness === undefined) mat.roughness = 0.78;
     if ('metalness' in mat && mat.metalness === undefined) mat.metalness = 0.0;
@@ -299,6 +302,7 @@ export class FightingGame {
   animate() {
     requestAnimationFrame(() => this.animate());
     const dt = Math.min(this.clock.getDelta(), 1 / 30);
+    this.orbitControls?.update();
     this.update(dt);
     this.vfx.update(dt);
     this.renderer.render(this.scene, this.camera);
