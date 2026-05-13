@@ -17,7 +17,6 @@ export class Fighter {
     this.isAI = isAI;
     this.vfx = vfx;
 
-    // Physics/controller root. Animation is applied only to the visual child.
     this.group = new THREE.Group();
     this.group.position.set(startX, 0, 0);
     this.velocity = new THREE.Vector3();
@@ -47,7 +46,6 @@ export class Fighter {
     this.actions = new Map();
     this.currentAction = null;
     this.animationsReady = false;
-    this.visualBaseY = 0;
   }
 
   async load() {
@@ -62,7 +60,6 @@ export class Fighter {
     }
 
     this.visual = visual;
-    this.visualBaseY = visual.position.y;
     this.group.add(visual);
     this.mixer = new THREE.AnimationMixer(visual);
 
@@ -128,7 +125,7 @@ export class Fighter {
   update(dt, input, opponent, arena) {
     if (this.hitStop > 0) {
       this.hitStop -= dt;
-      this.updateMixer(dt * 0.25);
+      this.mixer?.update(dt * 0.25);
       return;
     }
 
@@ -140,7 +137,7 @@ export class Fighter {
       }
       this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
       this.integrate(dt, arena);
-      this.updateMixer(dt);
+      this.mixer?.update(dt);
       return;
     }
 
@@ -152,7 +149,7 @@ export class Fighter {
       this.stun -= dt;
       this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
       this.integrate(dt, arena);
-      this.updateMixer(dt);
+      this.mixer?.update(dt);
       return;
     }
 
@@ -160,7 +157,7 @@ export class Fighter {
       this.updateAttack(opponent);
       this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
       this.integrate(dt, arena);
-      this.updateMixer(dt);
+      this.mixer?.update(dt);
       return;
     }
 
@@ -178,19 +175,15 @@ export class Fighter {
       this.velocity.y = this.jumpVelocity;
       this.isGrounded = false;
       this.setState(STATE.JUMP);
-      this.play('jump', 0.05, false, true); // uses Jumping.fbx from animationMap.js
+      this.play('jump', 0.05, false, true);
       this.vfx?.spawnDust(this.getFootPosition(), 18);
     } else {
       let move = 0;
       if (left) move -= 1;
       if (right) move += 1;
 
-      if (move !== 0) {
-        const targetSpeed = move * this.maxSpeed;
-        this.velocity.x = THREE.MathUtils.damp(this.velocity.x, targetSpeed, this.acceleration, dt);
-      } else {
-        this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
-      }
+      if (move !== 0) this.velocity.x = THREE.MathUtils.damp(this.velocity.x, move * this.maxSpeed, this.acceleration, dt);
+      else this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
 
       if (this.crouching) {
         this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction * 1.5, dt);
@@ -207,17 +200,7 @@ export class Fighter {
     }
 
     this.integrate(dt, arena);
-    this.updateMixer(dt);
-  }
-
-  updateMixer(dt) {
     this.mixer?.update(dt);
-    // Hard lock animation visual child to controller root; prevents FBX root motion from snapping character back.
-    if (this.visual) {
-      this.visual.position.x = 0;
-      this.visual.position.z = 0;
-      this.visual.position.y = this.visualBaseY;
-    }
   }
 
   setState(s) {
@@ -247,12 +230,8 @@ export class Fighter {
       if (correctSide && dist <= atk.range && opponent.health > 0) {
         const hit = opponent.receiveHit(atk, this);
         this.attackHasHit = true;
-        const hitPoint = new THREE.Vector3(
-          (this.group.position.x + opponent.group.position.x) * 0.5,
-          1.25,
-          0
-        );
-        this.vfx?.spawnHit(hitPoint, new THREE.Vector3(this.facing, 0.15, 0), hit?.blocked ? 14 : 28);
+        const hitPoint = new THREE.Vector3((this.group.position.x + opponent.group.position.x) * 0.5, 1.25, 0);
+        this.vfx?.spawnHit(hitPoint, new THREE.Vector3(this.facing, 0.15, 0), Boolean(hit?.blocked));
       }
     }
     if (t >= atk.startup + atk.active + atk.recovery) {
