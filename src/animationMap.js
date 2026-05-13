@@ -1,22 +1,33 @@
-// Rename these files to match your actual FBX animation filenames.
-// Put shared animation FBXs in public/assets/animations/ OR per-character animation FBXs beside the model.
+// Animation filenames for your current FBX folders.
+// Put the same filenames in BOTH folders:
+// public/assets/characters/player1/
+// public/assets/characters/player2/
+//
+// Values can be a string or an array. Arrays are picked randomly when played.
 export const DEFAULT_ANIMATION_MAP = {
-  idle: 'idle.fbx',
-  walkForward: 'walk_forward.fbx',
-  walkBack: 'walk_back.fbx',
-  jump: 'jump.fbx',
-  crouch: 'crouch.fbx',
-  block: 'block.fbx',
-  punch: 'punch.fbx',
-  kick: 'kick.fbx',
-  heavy: 'heavy.fbx',
-  hit: 'hit_react.fbx',
-  ko: 'ko.fbx',
-  victory: 'victory.fbx'
+  idle: 'Idle.fbx',
+  walkForward: 'Medium Step Forward.fbx',
+  walkBack: 'Step Backward.fbx',
+  jump: 'Jumping.fbx',
+  crouch: 'Block.fbx',
+  block: 'Block.fbx',
+
+  // Punch randomly uses one of these two animations.
+  punch: ['Cross Punch.fbx', 'Cross Punch mirror.fbx'],
+
+  // Kick / heavy mapped to your stronger attack animations.
+  kick: 'Flying Kick.fbx',
+  heavy: 'Jump Attack.fbx',
+
+  // Hit reaction randomly uses one of these three animations.
+  hit: ['Head Hit.fbx', 'Hit To Body.fbx', 'Receive Punch To The Face.fbx'],
+
+  ko: 'Dying.fbx',
+  victory: 'Idle.fbx'
 };
 
 export const ATTACKS = {
   punch: { damage: 7, startup: 0.09, active: 0.16, recovery: 0.20, range: 1.15, height: 'mid', push: 0.18 },
-  kick:  { damage: 10, startup: 0.13, active: 0.18, recovery: 0.26, range: 1.45, height: 'mid', push: 0.26 },
-  heavy: { damage: 16, startup: 0.22, active: 0.22, recovery: 0.42, range: 1.25, height: 'high', push: 0.38 }
+  kick:  { damage: 12, startup: 0.16, active: 0.20, recovery: 0.32, range: 1.65, height: 'mid', push: 0.30 },
+  heavy: { damage: 16, startup: 0.22, active: 0.24, recovery: 0.44, range: 1.45, height: 'mid', push: 0.40 }
 };
