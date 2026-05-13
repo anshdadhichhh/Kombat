@@ -1,20 +1,18 @@
-# Arena files
+# Arena GLB
 
-Put your two arena models here with these exact names:
+Put your generated arena model here and name it:
+
+```text
+arena.glb
+```
+
+The game also checks these fallback names:
 
 ```text
 arena1.glb
 arena2.glb
-```
-
-The in-game Arena dropdown switches between them.
-
-Fallback supported names are also checked:
-
-```text
-arena.glb
 arena.gltf
 arena.fbx
 ```
 
-Recommended: GLB is best for Three.js.
+The in-game sliders control arena scale, position X/Y/Z, and rotation X/Y/Z.
