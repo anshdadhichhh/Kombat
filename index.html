@@ -5,21 +5,34 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tekken Style JS Fighter</title>
     <style>
-      html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #05060a; }
-      #boot { position: fixed; inset: 0; background: #05060a; color: #fff; display: grid; place-items: center; font: 16px system-ui, Arial; z-index: 9999; }
+      html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #8fb6e8; }
+      #boot { position: fixed; inset: 0; background: #8fb6e8; color: #102033; display: grid; place-items: center; font: 16px system-ui, Arial; z-index: 9999; }
     </style>
   </head>
   <body>
     <div id="boot">Loading game...</div>
+
     <div id="hud">
       <div class="barWrap"><span>P1</span><div class="bar"><div id="p1Health" class="fill"></div></div></div>
       <div id="roundText">ROUND 1</div>
       <div class="barWrap right"><span>AI</span><div class="bar"><div id="p2Health" class="fill"></div></div></div>
     </div>
+
+    <button id="replayBtn">Replay</button>
+
+    <div id="arenaControls">
+      <b>Arena</b>
+      <label>Size <input id="arenaScale" type="range" min="0.25" max="3" step="0.05" value="1"><span id="arenaScaleValue">1.00</span></label>
+      <label>Offset X <input id="arenaX" type="range" min="-10" max="10" step="0.1" value="0"><span id="arenaXValue">0.0</span></label>
+      <label>Offset Y <input id="arenaY" type="range" min="-5" max="5" step="0.1" value="0"><span id="arenaYValue">0.0</span></label>
+      <label>Offset Z <input id="arenaZ" type="range" min="-10" max="10" step="0.1" value="0"><span id="arenaZValue">0.0</span></label>
+    </div>
+
     <div id="help">
-      <b>P1:</b> A/D move, W jump, S crouch/block, J punch, K kick, L heavy<br/>
+      <b>P1:</b> A/D move, W jump, S block/crouch, Q or Z punch, E or C kick, X heavy<br/>
       <b>AI:</b> automatic opponent
     </div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
