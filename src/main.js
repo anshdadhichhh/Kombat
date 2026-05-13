@@ -1,6 +1,8 @@
 import './style.css';
 import { FightingGame } from './game.js';
 
+document.getElementById('boot')?.remove();
+
 const game = new FightingGame(document.body);
 game.init().catch((err) => {
   console.error(err);
