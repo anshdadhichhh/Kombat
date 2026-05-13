@@ -1,0 +1,41 @@
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #05060a;
+  color: white;
+  font-family: system-ui, Arial, sans-serif;
+}
+canvas { display: block; }
+#hud {
+  position: fixed;
+  top: 18px;
+  left: 24px;
+  right: 24px;
+  display: grid;
+  grid-template-columns: 1fr 160px 1fr;
+  align-items: center;
+  gap: 18px;
+  z-index: 10;
+  pointer-events: none;
+  text-shadow: 0 2px 4px #000;
+}
+.barWrap { display: flex; align-items: center; gap: 10px; font-weight: 800; }
+.barWrap.right { flex-direction: row-reverse; }
+.bar { height: 24px; flex: 1; border: 2px solid #fff; background: #260606; box-shadow: 0 0 18px #000 inset; }
+.fill { height: 100%; width: 100%; background: linear-gradient(90deg, #16f27e, #ffe84a); transition: width 120ms linear; }
+.barWrap.right .fill { margin-left: auto; background: linear-gradient(90deg, #ffe84a, #16f27e); }
+#roundText { text-align: center; font-size: 24px; font-weight: 900; letter-spacing: 2px; }
+#help {
+  position: fixed;
+  bottom: 14px;
+  left: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(0,0,0,.55);
+  color: #ddd;
+  z-index: 10;
+  font-size: 13px;
+  line-height: 1.45;
+}
