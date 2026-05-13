@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ATTACKS, DEFAULT_ANIMATION_MAP } from './animationMap.js';
+import { ATTACKS, DEFAULT_ANIMATION_MAP, ANIMATION_SPEEDS } from './animationMap.js';
 import { makeFallbackFighter, normalizeFbxObject } from './assetLoader.js';
 
 const STATE = {
@@ -45,6 +45,7 @@ export class Fighter {
     this.mixer = null;
     this.actions = new Map();
     this.currentAction = null;
+    this.currentActionName = null;
     this.animationsReady = false;
   }
 
@@ -114,11 +115,12 @@ export class Fighter {
     next.reset();
     next.enabled = true;
     next.setEffectiveWeight(1);
-    next.setEffectiveTimeScale(1);
+    next.setEffectiveTimeScale(ANIMATION_SPEEDS[name] ?? 1);
     next.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
     next.fadeIn(fade).play();
     if (this.currentAction && this.currentAction !== next) this.currentAction.fadeOut(fade);
     this.currentAction = next;
+    this.currentActionName = name;
     return true;
   }
 
@@ -216,7 +218,7 @@ export class Fighter {
     this.attackHasHit = false;
     this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, 1 / 60);
     this.setState(STATE.ATTACK);
-    this.play(kind, 0.04, false, true);
+    this.play(kind, 0.025, false, true);
   }
 
   updateAttack(opponent) {
