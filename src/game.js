@@ -14,7 +14,7 @@ export class FightingGame {
     this.input = new KeyboardInput();
     this.aiInput = new AIInput(P2_BINDINGS);
     this.loader = new AssetLoader();
-    this.arena = { halfWidth: 7.5 };
+    this.arena = { halfWidth: 1000 };
     this.roundOver = false;
     this.assetsReady = false;
     this.fightStarted = false;
@@ -22,6 +22,7 @@ export class FightingGame {
     this.loadedArena = null;
     this.arenaBaseScale = new THREE.Vector3(1, 1, 1);
     this.arenaBasePosition = new THREE.Vector3(0, 0, 0);
+    this.arenaBaseRotation = new THREE.Euler(0, 0, 0);
     this.selectedArena = 'arena1.glb';
     this.fixedCamera = true;
 
@@ -39,7 +40,7 @@ export class FightingGame {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     this.renderer.shadowMap.enabled = false;
     this.container.appendChild(this.renderer.domElement);
-    this.vfx = new VFXSystem(this.scene);
+    this.vfx = new VFXSystem(this.scene, this.camera);
 
     window.addEventListener('resize', () => this.onResize());
     this.setupSliders();
@@ -57,7 +58,7 @@ export class FightingGame {
     try {
       await Promise.all([this.loadArena(), this.loadFighters()]);
       this.assetsReady = true;
-      this.applyCharacterSliders();
+      this.applyAllTransforms();
       this.showBoot('ALL ASSETS LOADED. Press PLAY to start.', true);
       console.log('ALL ASSETS LOADED: arena + both character meshes + all configured animations. PLAY button enabled.');
     } catch (err) {
@@ -70,7 +71,6 @@ export class FightingGame {
     const back = new THREE.Mesh(new THREE.PlaneGeometry(5000, 2500), new THREE.MeshBasicMaterial({ color: 0x8fb6e8, depthWrite: false }));
     back.position.set(0, 500, -1600);
     this.scene.add(back);
-    // No giant ground plane here: it was hiding mountain/arena geometry when Y offset was adjusted.
   }
 
   addLights() {
@@ -90,14 +90,7 @@ export class FightingGame {
     const select = document.getElementById('arenaSelect');
     const name = requestedName || select?.value || this.selectedArena || 'arena1.glb';
     this.selectedArena = name;
-    const uniqueUrls = [...new Set([
-      `/assets/arena/${name}`,
-      '/assets/arena/arena1.glb',
-      '/assets/arena/arena2.glb',
-      '/assets/arena/arena.glb',
-      '/assets/arena/arena.gltf',
-      '/assets/arena/arena.fbx'
-    ])];
+    const uniqueUrls = [...new Set([`/assets/arena/${name}`, '/assets/arena/arena1.glb', '/assets/arena/arena2.glb', '/assets/arena/arena.glb', '/assets/arena/arena.gltf', '/assets/arena/arena.fbx'])];
 
     for (const url of uniqueUrls) {
       try {
@@ -113,7 +106,7 @@ export class FightingGame {
     console.warn('No arena1.glb / arena2.glb / arena.glb / arena.fbx found. Keeping fallback arena.');
     this.loadedArena = this.fallbackArena;
     this.captureArenaBaseTransform(this.fallbackArena);
-    this.applyArenaSliders();
+    this.applyArenaTransform();
   }
 
   replaceArena(arenaObject) {
@@ -122,9 +115,9 @@ export class FightingGame {
     this.scene.add(arenaObject);
     this.loadedArena = arenaObject;
     this.captureArenaBaseTransform(arenaObject);
-    this.applyArenaSliders();
+    this.applyArenaTransform();
     if (this.fallbackArena) this.fallbackArena.visible = false;
-    this.vfx?.spawnFlash(new THREE.Vector3(0, 1.2, 0), 0x99ccff, 1.2, 0.18);
+    this.vfx?.spawnFlash(new THREE.Vector3(0, 1.2, 0.8), 0x99ccff, 1.2, 0.18);
   }
 
   fitArenaToStage(object) {
@@ -140,23 +133,15 @@ export class FightingGame {
       }
     });
     object.updateMatrixWorld(true);
-    let box = new THREE.Box3().setFromObject(object);
-    const size = new THREE.Vector3();
+    const box = new THREE.Box3().setFromObject(object);
     const center = new THREE.Vector3();
-    box.getSize(size);
-    box.getCenter(center);
+    const size = new THREE.Vector3();
+    box.getCenter(center); box.getSize(size);
     object.position.x -= center.x;
     object.position.z -= center.z;
     object.position.y -= box.min.y;
     const maxDim = Math.max(size.x, size.z);
     if (maxDim > 0.001) object.scale.multiplyScalar(Math.min(40 / maxDim, 1));
-    this.groundObject(object, 0);
-  }
-
-  groundObject(object, groundY = 0) {
-    object.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(object);
-    object.position.y += groundY - box.min.y;
   }
 
   makeFallbackArena() {
@@ -174,16 +159,15 @@ export class FightingGame {
   }
 
   setupSliders() {
-    [
-      'arenaScale', 'arenaX', 'arenaY', 'arenaZ',
-      'charScale', 'charY', 'charZ', 'p1X', 'p2X'
-    ].forEach((id) => {
+    const ids = [
+      'arenaScaleX','arenaScaleY','arenaScaleZ','arenaX','arenaY','arenaZ','arenaRotX','arenaRotY','arenaRotZ',
+      'p1Scale','p1X','p1Y','p1Z','p1RotX','p1RotY','p1RotZ',
+      'p2Scale','p2X','p2Y','p2Z','p2RotX','p2RotY','p2RotZ'
+    ];
+    ids.forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
-      el.addEventListener('input', () => {
-        this.applyArenaSliders();
-        this.applyCharacterSliders();
-      });
+      el.addEventListener('input', () => this.applyAllTransforms());
     });
   }
 
@@ -198,191 +182,62 @@ export class FightingGame {
     });
   }
 
-  setupReplayButton() {
-    const btn = document.getElementById('replayBtn');
-    if (btn) btn.addEventListener('click', () => this.resetRound());
+  setupReplayButton() { const btn = document.getElementById('replayBtn'); if (btn) btn.addEventListener('click', () => this.resetRound()); }
+  setupPlayButton() { const btn = document.getElementById('playBtn'); if (btn) btn.addEventListener('click', () => this.startFight()); }
+  startFight() { if (!this.assetsReady) return; this.fightStarted = true; this.hideBoot(); this.clock.getDelta(); }
+  showBoot(message, showPlay) { const boot = document.getElementById('boot'); const msg = document.getElementById('bootMessage'); const btn = document.getElementById('playBtn'); if (!boot) return; boot.style.display = 'grid'; if (msg) msg.textContent = message; if (btn) btn.style.display = showPlay ? 'inline-block' : 'none'; }
+  hideBoot() { const boot = document.getElementById('boot'); if (boot) boot.style.display = 'none'; }
+
+  captureArenaBaseTransform(object) { if (!object) return; this.arenaBaseScale.copy(object.scale); this.arenaBasePosition.copy(object.position); this.arenaBaseRotation.copy(object.rotation); }
+  n(id, fallback) { const el = document.getElementById(id); return el ? (Number.parseFloat(el.value) || 0) : fallback; }
+  applyAllTransforms() { this.applyArenaTransform(); this.applyCharacterTransforms(); }
+
+  applyArenaTransform() {
+    const o = this.loadedArena || this.fallbackArena;
+    if (!o) return;
+    const sx = this.n('arenaScaleX', 1), sy = this.n('arenaScaleY', 1), sz = this.n('arenaScaleZ', 1);
+    const x = this.n('arenaX', 0), y = this.n('arenaY', 0), z = this.n('arenaZ', 0);
+    const rx = this.n('arenaRotX', 0), ry = this.n('arenaRotY', 0), rz = this.n('arenaRotZ', 0);
+    o.scale.set(this.arenaBaseScale.x * sx, this.arenaBaseScale.y * sy, this.arenaBaseScale.z * sz);
+    o.position.copy(this.arenaBasePosition).add(new THREE.Vector3(x, y, z));
+    o.rotation.set(this.arenaBaseRotation.x + THREE.MathUtils.degToRad(rx), this.arenaBaseRotation.y + THREE.MathUtils.degToRad(ry), this.arenaBaseRotation.z + THREE.MathUtils.degToRad(rz));
+    this.label('arenaScaleXValue', sx.toFixed(2)); this.label('arenaScaleYValue', sy.toFixed(2)); this.label('arenaScaleZValue', sz.toFixed(2));
+    this.label('arenaXValue', x.toFixed(1)); this.label('arenaYValue', y.toFixed(1)); this.label('arenaZValue', z.toFixed(1));
+    this.label('arenaRotXValue', rx.toFixed(0)); this.label('arenaRotYValue', ry.toFixed(0)); this.label('arenaRotZValue', rz.toFixed(0));
   }
 
-  setupPlayButton() {
-    const btn = document.getElementById('playBtn');
-    if (btn) btn.addEventListener('click', () => this.startFight());
+  applyCharacterTransforms() { if (!this.p1 || !this.p2) return; this.applyOneCharacter(this.p1, 'p1'); this.applyOneCharacter(this.p2, 'p2'); }
+  applyOneCharacter(f, prefix) {
+    const scale = this.n(`${prefix}Scale`, 1), x = this.n(`${prefix}X`, f.startX), y = this.n(`${prefix}Y`, 0), z = this.n(`${prefix}Z`, 0);
+    const rx = this.n(`${prefix}RotX`, 0), ry = this.n(`${prefix}RotY`, 0), rz = this.n(`${prefix}RotZ`, 0);
+    f.applyVisualTransform({ scale, x: 0, y: 0, z: 0, rx, ry, rz });
+    if (!this.fightStarted || this.roundOver) f.group.position.set(x, y, z); else { f.group.position.y = y; f.group.position.z = z; }
+    this.label(`${prefix}ScaleValue`, scale.toFixed(2)); this.label(`${prefix}XValue`, x.toFixed(1)); this.label(`${prefix}YValue`, y.toFixed(1)); this.label(`${prefix}ZValue`, z.toFixed(1));
+    this.label(`${prefix}RotXValue`, rx.toFixed(0)); this.label(`${prefix}RotYValue`, ry.toFixed(0)); this.label(`${prefix}RotZValue`, rz.toFixed(0));
   }
-
-  startFight() {
-    if (!this.assetsReady) return;
-    this.fightStarted = true;
-    this.hideBoot();
-    this.clock.getDelta();
-  }
-
-  showBoot(message, showPlay) {
-    const boot = document.getElementById('boot');
-    const msg = document.getElementById('bootMessage');
-    const btn = document.getElementById('playBtn');
-    if (!boot) return;
-    boot.style.display = 'grid';
-    if (msg) msg.textContent = message;
-    if (btn) btn.style.display = showPlay ? 'inline-block' : 'none';
-  }
-
-  hideBoot() {
-    const boot = document.getElementById('boot');
-    if (boot) boot.style.display = 'none';
-  }
-
-  captureArenaBaseTransform(object) {
-    if (!object) return;
-    this.arenaBaseScale.copy(object.scale);
-    this.arenaBasePosition.copy(object.position);
-  }
-
-  sliderNumber(id, fallback) {
-    const el = document.getElementById(id);
-    if (!el) return fallback;
-    return Number.parseFloat(el.value) || fallback;
-  }
-
-  applyArenaSliders() {
-    const object = this.loadedArena || this.fallbackArena;
-    if (!object) return;
-    const scale = this.sliderNumber('arenaScale', 1);
-    const x = this.sliderNumber('arenaX', 0);
-    const y = this.sliderNumber('arenaY', 0);
-    const z = this.sliderNumber('arenaZ', 0);
-    object.scale.copy(this.arenaBaseScale).multiplyScalar(scale);
-    object.position.copy(this.arenaBasePosition).add(new THREE.Vector3(x, 0, z));
-    this.groundObject(object, 0);
-    object.position.y += y;
-    this.setSliderLabel('arenaScaleValue', scale.toFixed(2));
-    this.setSliderLabel('arenaXValue', x.toFixed(1));
-    this.setSliderLabel('arenaYValue', y.toFixed(1));
-    this.setSliderLabel('arenaZValue', z.toFixed(1));
-  }
-
-  applyCharacterSliders() {
-    if (!this.p1 || !this.p2) return;
-    const scale = this.sliderNumber('charScale', 1);
-    const y = this.sliderNumber('charY', 0);
-    const z = this.sliderNumber('charZ', 0);
-    const p1x = this.sliderNumber('p1X', -2.4);
-    const p2x = this.sliderNumber('p2X', 2.4);
-    this.p1.applyVisualTransform({ scale, y, z });
-    this.p2.applyVisualTransform({ scale, y, z });
-    if (!this.fightStarted || this.roundOver) {
-      this.p1.group.position.x = p1x;
-      this.p2.group.position.x = p2x;
-    }
-    this.setSliderLabel('charScaleValue', scale.toFixed(2));
-    this.setSliderLabel('charYValue', y.toFixed(1));
-    this.setSliderLabel('charZValue', z.toFixed(1));
-    this.setSliderLabel('p1XValue', p1x.toFixed(1));
-    this.setSliderLabel('p2XValue', p2x.toFixed(1));
-  }
-
-  setSliderLabel(id, value) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = value;
-  }
+  label(id, value) { const el = document.getElementById(id); if (el) el.textContent = value; }
 
   async loadFighters() {
     this.p1 = new Fighter({ id: 'P1', color: 0x2f7dff, startX: -2.4, modelUrl: '/assets/characters/player1/character.fbx', animationBaseUrl: '/assets/characters/player1', bindings: P1_BINDINGS, assetLoader: this.loader, vfx: this.vfx });
-    this.p2 = new Fighter({ id: 'P2-AI', color: 0xff374f, startX: 2.4, modelUrl: '/assets/characters/player2/character.fbx', animationBaseUrl: '/assets/characters/player2', bindings: P2_BINDINGS, assetLoader: this.loader, isAI: true, vfx: this.vfx });
+    this.p2 = new Fighter({ id: 'P2-AI-RIGHT', color: 0xff374f, startX: 2.4, modelUrl: '/assets/characters/player2/character.fbx', animationBaseUrl: '/assets/characters/player2', bindings: P2_BINDINGS, assetLoader: this.loader, isAI: true, vfx: this.vfx });
     await Promise.all([this.p1.load(), this.p2.load()]);
     this.scene.add(this.p1.group, this.p2.group);
-    this.applyCharacterSliders();
-    this.p1.faceOpponent(this.p2);
-    this.p2.faceOpponent(this.p1);
+    this.applyCharacterTransforms();
+    this.p1.faceOpponent(this.p2); this.p2.faceOpponent(this.p1);
   }
 
-  animate() {
-    requestAnimationFrame(() => this.animate());
-    const dt = Math.min(this.clock.getDelta(), 1 / 30);
-    this.update(dt);
-    this.vfx.update(dt);
-    this.renderer.render(this.scene, this.camera);
-    this.input.endFrame();
-    this.aiInput.endFrame();
-  }
-
+  animate() { requestAnimationFrame(() => this.animate()); const dt = Math.min(this.clock.getDelta(), 1 / 30); this.update(dt); this.vfx.update(dt); this.renderer.render(this.scene, this.camera); this.input.endFrame(); this.aiInput.endFrame(); }
   update(dt) {
     if (!this.assetsReady || !this.p1 || !this.p2) return;
-    if (!this.fightStarted) {
-      this.p1.play('idle', 0.12);
-      this.p2.play('idle', 0.12);
-      this.p1.mixer?.update(dt);
-      this.p2.mixer?.update(dt);
-      return;
-    }
-
-    this.p1.faceOpponent(this.p2);
-    this.p2.faceOpponent(this.p1);
-    // NO body collision/push. Characters can pass/cross each other.
-    if (!this.roundOver) {
-      this.aiInput.update(dt, this.p2, this.p1);
-      this.p1.update(dt, this.input, this.p2, this.arena);
-      this.p2.update(dt, this.aiInput, this.p1, this.arena);
-      this.checkRoundOver();
-    } else {
-      this.p1.update(dt, NEUTRAL_INPUT, this.p2, this.arena);
-      this.p2.update(dt, NEUTRAL_INPUT, this.p1, this.arena);
-    }
-    this.updateHud();
-    if (!this.fixedCamera) this.updateCamera(dt);
+    if (!this.fightStarted) { this.p1.play('idle', 0.12); this.p2.play('idle', 0.12); this.p1.mixer?.update(dt); this.p2.mixer?.update(dt); return; }
+    this.p1.faceOpponent(this.p2); this.p2.faceOpponent(this.p1);
+    if (!this.roundOver) { this.aiInput.update(dt, this.p2, this.p1); this.p1.update(dt, this.input, this.p2, this.arena); this.p2.update(dt, this.aiInput, this.p1, this.arena); this.checkRoundOver(); }
+    else { this.p1.update(dt, NEUTRAL_INPUT, this.p2, this.arena); this.p2.update(dt, NEUTRAL_INPUT, this.p1, this.arena); }
+    this.updateHud(); if (!this.fixedCamera) this.updateCamera(dt);
   }
-
-  updateCamera(dt) {
-    const centerX = (this.p1.group.position.x + this.p2.group.position.x) * 0.5;
-    const distance = Math.abs(this.p1.group.position.x - this.p2.group.position.x);
-    const targetZ = THREE.MathUtils.clamp(8.5 + distance * 0.25, 9.5, 12.5);
-    const target = new THREE.Vector3(centerX, 3.1, targetZ);
-    this.camera.position.lerp(target, 1 - Math.pow(0.001, dt));
-    this.camera.lookAt(centerX, 1.15, 0);
-  }
-
-  updateHud() {
-    document.getElementById('p1Health').style.width = `${this.p1.health}%`;
-    document.getElementById('p2Health').style.width = `${this.p2.health}%`;
-  }
-
-  checkRoundOver() {
-    if (!(this.p1.health <= 0 || this.p2.health <= 0)) return;
-    const text = document.getElementById('roundText');
-    this.roundOver = true;
-    text.textContent = this.p1.health <= 0 && this.p2.health <= 0 ? 'DRAW' : (this.p1.health <= 0 ? 'AI WINS' : 'P1 WINS');
-    const replay = document.getElementById('replayBtn');
-    if (replay) replay.style.display = 'block';
-  }
-
-  resetRound() {
-    if (!this.p1 || !this.p2) return;
-    this.roundOver = false;
-    this.p1.health = 100;
-    this.p2.health = 100;
-    this.p1.koStarted = this.p2.koStarted = false;
-    this.p1.stun = this.p2.stun = 0;
-    this.p1.hitStop = this.p2.hitStop = 0;
-    this.p1.group.position.set(this.sliderNumber('p1X', -2.4), 0, 0);
-    this.p2.group.position.set(this.sliderNumber('p2X', 2.4), 0, 0);
-    this.p1.velocity.set(0, 0, 0);
-    this.p2.velocity.set(0, 0, 0);
-    this.p1.setState('idle');
-    this.p2.setState('idle');
-    this.p1.play('idle', 0.05, true, true);
-    this.p2.play('idle', 0.05, true, true);
-    this.p1.faceOpponent(this.p2);
-    this.p2.faceOpponent(this.p1);
-    document.getElementById('roundText').textContent = 'ROUND 1';
-    document.getElementById('replayBtn').style.display = 'none';
-    this.vfx.spawnFlash(new THREE.Vector3(0, 1.2, 0), 0xffffff, 1.2, 0.18);
-    this.updateHud();
-  }
-
-  showLoading(message) { this.showBoot(message, false); }
-  hideLoading() { this.hideBoot(); }
-
-  onResize() {
-    this.camera.aspect = window.innerWidth / window.innerHeight;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
-  }
+  updateCamera(dt) { const centerX = (this.p1.group.position.x + this.p2.group.position.x) * 0.5; const distance = Math.abs(this.p1.group.position.x - this.p2.group.position.x); const targetZ = THREE.MathUtils.clamp(8.5 + distance * 0.25, 9.5, 12.5); const target = new THREE.Vector3(centerX, 3.1, targetZ); this.camera.position.lerp(target, 1 - Math.pow(0.001, dt)); this.camera.lookAt(centerX, 1.15, 0); }
+  updateHud() { document.getElementById('p1Health').style.width = `${this.p1.health}%`; document.getElementById('p2Health').style.width = `${this.p2.health}%`; }
+  checkRoundOver() { if (!(this.p1.health <= 0 || this.p2.health <= 0)) return; const text = document.getElementById('roundText'); this.roundOver = true; text.textContent = this.p1.health <= 0 && this.p2.health <= 0 ? 'DRAW' : (this.p1.health <= 0 ? 'AI WINS' : 'P1 WINS'); const replay = document.getElementById('replayBtn'); if (replay) replay.style.display = 'block'; }
+  resetRound() { if (!this.p1 || !this.p2) return; this.roundOver = false; this.p1.health = 100; this.p2.health = 100; this.p1.koStarted = this.p2.koStarted = false; this.p1.stun = this.p2.stun = 0; this.p1.hitStop = this.p2.hitStop = 0; this.applyCharacterTransforms(); this.p1.velocity.set(0,0,0); this.p2.velocity.set(0,0,0); this.p1.setState('idle'); this.p2.setState('idle'); this.p1.play('idle',0.05,true,true); this.p2.play('idle',0.05,true,true); this.p1.faceOpponent(this.p2); this.p2.faceOpponent(this.p1); document.getElementById('roundText').textContent = 'ROUND 1'; document.getElementById('replayBtn').style.display = 'none'; this.updateHud(); }
+  onResize() { this.camera.aspect = window.innerWidth / window.innerHeight; this.camera.updateProjectionMatrix(); this.renderer.setSize(window.innerWidth, window.innerHeight); }
 }
