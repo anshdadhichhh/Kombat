@@ -28,6 +28,8 @@
         <button id="gizmoRotate">Rotate</button>
         <button id="gizmoScale">Scale</button>
       </div>
+      <label>Orbit <input id="orbitMode" type="checkbox"><span>cam</span></label>
+      <div class="buttonRow"><button id="resetCamera" type="button">Reset Camera</button></div>
       <label>Scale <input id="arenaScale" type="range" min="0.001" max="100" step="0.001" value="1"><span id="arenaScaleValue">1.000</span></label>
       <label>Pos X <input id="arenaX" type="range" min="-1000" max="1000" step="0.01" value="0"><span id="arenaXValue">0.00</span></label>
       <label>Pos Y <input id="arenaY" type="range" min="-1000" max="1000" step="0.01" value="0"><span id="arenaYValue">0.00</span></label>
@@ -43,7 +45,7 @@
 
     <div id="help">
       <b>P1 LEFT:</b> A/D move, W jump, S block/crouch, Q or Z punch, E or C kick, X heavy<br/>
-      <b>Arena controls:</b> drag colored arrows like Blender. Put arena at public/assets/arena/arena.glb
+      <b>Arena controls:</b> enable Orbit to rotate camera; drag colored gizmo arrows to place arena.
     </div>
 
     <script type="module" src="/src/main.js"></script>
