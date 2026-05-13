@@ -18,7 +18,6 @@ export class FightingGame {
     this.roundOver = false;
     this.assetsReady = false;
     this.fightStarted = false;
-    this.loadingEl = null;
     this.fallbackArena = null;
     this.loadedArena = null;
     this.arenaBaseScale = new THREE.Vector3(1, 1, 1);
@@ -28,7 +27,7 @@ export class FightingGame {
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x8fb6e8);
-    this.scene.fog = null; // no fog clipping huge arena environments
+    this.scene.fog = null;
 
     this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 10000);
     this.camera.position.set(0, 3.2, 11.0);
@@ -43,7 +42,7 @@ export class FightingGame {
     this.vfx = new VFXSystem(this.scene);
 
     window.addEventListener('resize', () => this.onResize());
-    this.setupArenaSliders();
+    this.setupSliders();
     this.setupReplayButton();
     this.setupArenaSelect();
     this.setupPlayButton();
@@ -53,13 +52,14 @@ export class FightingGame {
     this.addEnvironment();
     this.addLights();
     this.makeFallbackArena();
-    this.showBoot('Loading all assets...', false);
+    this.showBoot('Loading ALL assets: arena, characters, and every animation...', false);
     this.animate();
     try {
       await Promise.all([this.loadArena(), this.loadFighters()]);
       this.assetsReady = true;
-      this.showBoot('Assets loaded. Press Play to start.', true);
-      console.log('Assets loaded. Press Play. Characters can cross/pass each other now.');
+      this.applyCharacterSliders();
+      this.showBoot('ALL ASSETS LOADED. Press PLAY to start.', true);
+      console.log('ALL ASSETS LOADED: arena + both character meshes + all configured animations. PLAY button enabled.');
     } catch (err) {
       console.error('Game asset load failed:', err);
       this.showBoot(`Asset load failed. Check console. ${err.message || err}`, false);
@@ -70,10 +70,7 @@ export class FightingGame {
     const back = new THREE.Mesh(new THREE.PlaneGeometry(5000, 2500), new THREE.MeshBasicMaterial({ color: 0x8fb6e8, depthWrite: false }));
     back.position.set(0, 500, -1600);
     this.scene.add(back);
-    const base = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), new THREE.MeshStandardMaterial({ color: 0x6f7f90, roughness: 0.9 }));
-    base.rotation.x = -Math.PI / 2;
-    base.position.y = -0.55;
-    this.scene.add(base);
+    // No giant ground plane here: it was hiding mountain/arena geometry when Y offset was adjusted.
   }
 
   addLights() {
@@ -84,7 +81,7 @@ export class FightingGame {
     const fill = new THREE.DirectionalLight(0xdde8ff, 1.6);
     fill.position.set(5, 4, 5);
     this.scene.add(fill);
-    const front = new THREE.PointLight(0xffffff, 1.4, 600);
+    const front = new THREE.PointLight(0xffffff, 1.4, 1000);
     front.position.set(0, 3, 6);
     this.scene.add(front);
   }
@@ -151,7 +148,6 @@ export class FightingGame {
     object.position.x -= center.x;
     object.position.z -= center.z;
     object.position.y -= box.min.y;
-    // Keep the full environment, but don't force huge mountain maps down too aggressively.
     const maxDim = Math.max(size.x, size.z);
     if (maxDim > 0.001) object.scale.multiplyScalar(Math.min(40 / maxDim, 1));
     this.groundObject(object, 0);
@@ -177,10 +173,17 @@ export class FightingGame {
     this.captureArenaBaseTransform(this.fallbackArena);
   }
 
-  setupArenaSliders() {
-    ['arenaScale', 'arenaX', 'arenaY', 'arenaZ'].forEach((id) => {
+  setupSliders() {
+    [
+      'arenaScale', 'arenaX', 'arenaY', 'arenaZ',
+      'charScale', 'charY', 'charZ', 'p1X', 'p2X'
+    ].forEach((id) => {
       const el = document.getElementById(id);
-      if (el) el.addEventListener('input', () => this.applyArenaSliders());
+      if (!el) return;
+      el.addEventListener('input', () => {
+        this.applyArenaSliders();
+        this.applyCharacterSliders();
+      });
     });
   }
 
@@ -190,7 +193,7 @@ export class FightingGame {
     select.addEventListener('change', async () => {
       this.showBoot(`Loading ${select.value}...`, false);
       await this.loadArena(select.value);
-      if (this.assetsReady && !this.fightStarted) this.showBoot('Assets loaded. Press Play to start.', true);
+      if (this.assetsReady && !this.fightStarted) this.showBoot('ALL ASSETS LOADED. Press PLAY to start.', true);
       else this.hideBoot();
     });
   }
@@ -256,6 +259,26 @@ export class FightingGame {
     this.setSliderLabel('arenaZValue', z.toFixed(1));
   }
 
+  applyCharacterSliders() {
+    if (!this.p1 || !this.p2) return;
+    const scale = this.sliderNumber('charScale', 1);
+    const y = this.sliderNumber('charY', 0);
+    const z = this.sliderNumber('charZ', 0);
+    const p1x = this.sliderNumber('p1X', -2.4);
+    const p2x = this.sliderNumber('p2X', 2.4);
+    this.p1.applyVisualTransform({ scale, y, z });
+    this.p2.applyVisualTransform({ scale, y, z });
+    if (!this.fightStarted || this.roundOver) {
+      this.p1.group.position.x = p1x;
+      this.p2.group.position.x = p2x;
+    }
+    this.setSliderLabel('charScaleValue', scale.toFixed(2));
+    this.setSliderLabel('charYValue', y.toFixed(1));
+    this.setSliderLabel('charZValue', z.toFixed(1));
+    this.setSliderLabel('p1XValue', p1x.toFixed(1));
+    this.setSliderLabel('p2XValue', p2x.toFixed(1));
+  }
+
   setSliderLabel(id, value) {
     const el = document.getElementById(id);
     if (el) el.textContent = value;
@@ -266,6 +289,7 @@ export class FightingGame {
     this.p2 = new Fighter({ id: 'P2-AI', color: 0xff374f, startX: 2.4, modelUrl: '/assets/characters/player2/character.fbx', animationBaseUrl: '/assets/characters/player2', bindings: P2_BINDINGS, assetLoader: this.loader, isAI: true, vfx: this.vfx });
     await Promise.all([this.p1.load(), this.p2.load()]);
     this.scene.add(this.p1.group, this.p2.group);
+    this.applyCharacterSliders();
     this.p1.faceOpponent(this.p2);
     this.p2.faceOpponent(this.p1);
   }
@@ -292,7 +316,7 @@ export class FightingGame {
 
     this.p1.faceOpponent(this.p2);
     this.p2.faceOpponent(this.p1);
-    // No body push: fighters are allowed to pass/cross through each other.
+    // NO body collision/push. Characters can pass/cross each other.
     if (!this.roundOver) {
       this.aiInput.update(dt, this.p2, this.p1);
       this.p1.update(dt, this.input, this.p2, this.arena);
@@ -337,8 +361,8 @@ export class FightingGame {
     this.p1.koStarted = this.p2.koStarted = false;
     this.p1.stun = this.p2.stun = 0;
     this.p1.hitStop = this.p2.hitStop = 0;
-    this.p1.group.position.set(-2.4, 0, 0);
-    this.p2.group.position.set(2.4, 0, 0);
+    this.p1.group.position.set(this.sliderNumber('p1X', -2.4), 0, 0);
+    this.p2.group.position.set(this.sliderNumber('p2X', 2.4), 0, 0);
     this.p1.velocity.set(0, 0, 0);
     this.p2.velocity.set(0, 0, 0);
     this.p1.setState('idle');
