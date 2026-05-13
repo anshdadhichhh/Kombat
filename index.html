@@ -11,7 +11,7 @@
     </style>
   </head>
   <body>
-    <div id="boot"><div style="text-align:center"><div id="bootMessage">Building rocky arena and loading fighters...</div><button id="playBtn">PLAY</button></div></div>
+    <div id="boot"><div style="text-align:center"><div id="bootMessage">Loading arena and fighters...</div><button id="playBtn">PLAY</button></div></div>
 
     <div id="hud">
       <div class="barWrap"><span>P1 LEFT</span><div class="bar"><div id="p1Health" class="fill"></div></div></div>
@@ -21,9 +21,20 @@
 
     <button id="replayBtn">Replay</button>
 
+    <div id="arenaControls">
+      <b>Arena GLB Transform</b>
+      <label>Scale <input id="arenaScale" type="range" min="0.01" max="100" step="0.05" value="1"><span id="arenaScaleValue">1.00</span></label>
+      <label>Pos X <input id="arenaX" type="range" min="-1000" max="1000" step="1" value="0"><span id="arenaXValue">0.0</span></label>
+      <label>Pos Y <input id="arenaY" type="range" min="-1000" max="1000" step="1" value="0"><span id="arenaYValue">0.0</span></label>
+      <label>Pos Z <input id="arenaZ" type="range" min="-1000" max="1000" step="1" value="0"><span id="arenaZValue">0.0</span></label>
+      <label>Rot X <input id="arenaRotX" type="range" min="-180" max="180" step="1" value="0"><span id="arenaRotXValue">0</span></label>
+      <label>Rot Y <input id="arenaRotY" type="range" min="-180" max="180" step="1" value="0"><span id="arenaRotYValue">0</span></label>
+      <label>Rot Z <input id="arenaRotZ" type="range" min="-180" max="180" step="1" value="0"><span id="arenaRotZValue">0</span></label>
+    </div>
+
     <div id="help">
       <b>P1 LEFT:</b> A/D move, W jump, S block/crouch, Q or Z punch, E or C kick, X heavy<br/>
-      <b>AI RIGHT:</b> automatic opponent · no collision separation · rocky Tekken-style arena
+      <b>AI RIGHT:</b> automatic opponent · put arena at public/assets/arena/arena.glb
     </div>
 
     <script type="module" src="/src/main.js"></script>
