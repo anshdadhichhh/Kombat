@@ -40,11 +40,40 @@ export class AssetLoader {
 
   async loadAnimationClip(url, clipName) {
     const object = await this.loadObject(url);
-    const clip = object.animations?.[0];
-    if (!clip) throw new Error(`No animation clip found in ${url}`);
+    const rawClip = object.animations?.[0];
+    if (!rawClip) throw new Error(`No animation clip found in ${url}`);
+    const clip = removeRootMotion(rawClip, { keepVertical: false });
     clip.name = clipName;
     return clip;
   }
+}
+
+// Fighting games should move the controller object with physics, not animation root motion.
+// This strips FBX root/hip translation tracks so walk/punch/jump clips don't pull the mesh back to origin.
+export function removeRootMotion(clip, { keepVertical = false } = {}) {
+  const rootNames = ['Root', 'Armature', 'Hips', 'mixamorigHips', 'mixamorig: Hips', 'Bip001', 'Pelvis'];
+  const cleanedTracks = [];
+
+  for (const track of clip.tracks) {
+    const isPositionTrack = track.name.endsWith('.position');
+    const isRootLike = track.name === '.position' || rootNames.some((name) => track.name.includes(name));
+
+    if (!isPositionTrack || !isRootLike) {
+      cleanedTracks.push(track.clone());
+      continue;
+    }
+
+    if (!keepVertical) continue;
+
+    const cloned = track.clone();
+    for (let i = 0; i < cloned.values.length; i += 3) {
+      cloned.values[i + 0] = cloned.values[0];
+      cloned.values[i + 2] = cloned.values[2];
+    }
+    cleanedTracks.push(cloned);
+  }
+
+  return new THREE.AnimationClip(`${clip.name || 'clip'}_inPlace`, clip.duration, cleanedTracks);
 }
 
 export function makeFallbackFighter(color = 0x3388ff) {
@@ -76,8 +105,8 @@ export function normalizeObject(object, targetHeight = 2.0) {
       child.receiveShadow = true;
       child.frustumCulled = false;
       if (child.material) {
-        if (Array.isArray(child.material)) child.material.forEach((m) => { m.side = THREE.FrontSide; });
-        else child.material.side = THREE.FrontSide;
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        mats.forEach((m) => { m.side = THREE.FrontSide; });
       }
     }
   });
@@ -97,5 +126,4 @@ export function normalizeObject(object, targetHeight = 2.0) {
   return object;
 }
 
-// Backwards-compatible name used by older code.
 export const normalizeFbxObject = normalizeObject;
