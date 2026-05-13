@@ -50,7 +50,7 @@ export class Fighter {
     this.animationsReady = false;
     this.visualBaseScale = new THREE.Vector3(1, 1, 1);
     this.visualBasePosition = new THREE.Vector3(0, 0, 0);
-    this.visualOffset = { scale: 1, y: 0, z: 0 };
+    this.visualOffset = { scale: 1, x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 };
   }
 
   async load() {
@@ -70,7 +70,6 @@ export class Fighter {
     this.visualBasePosition.copy(visual.position);
     this.mixer = new THREE.AnimationMixer(visual);
 
-    // IMPORTANT: wait for every configured animation before enabling PLAY.
     await this.loadAllAnimations();
     this.animationsReady = true;
     this.play('idle', 0.05, true, true);
@@ -108,11 +107,12 @@ export class Fighter {
     if (name === 'idle' && !this.actions.has('idle')) console.error(`[${this.id}] Idle animation not loaded: ${base}/Idle.fbx`);
   }
 
-  applyVisualTransform({ scale = 1, y = 0, z = 0 } = {}) {
-    this.visualOffset = { scale, y, z };
+  applyVisualTransform({ scale = 1, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0 } = {}) {
+    this.visualOffset = { scale, x, y, z, rx, ry, rz };
     if (!this.visual) return;
     this.visual.scale.copy(this.visualBaseScale).multiplyScalar(scale);
-    this.visual.position.copy(this.visualBasePosition).add(new THREE.Vector3(0, y, z));
+    this.visual.position.copy(this.visualBasePosition).add(new THREE.Vector3(x, y, z));
+    this.visual.rotation.set(THREE.MathUtils.degToRad(rx), THREE.MathUtils.degToRad(ry), THREE.MathUtils.degToRad(rz));
   }
 
   pickAction(name) {
@@ -204,7 +204,6 @@ export class Fighter {
       if (this.crouching) {
         this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction * 1.5, dt);
         this.setState(this.blocking ? STATE.BLOCK : STATE.CROUCH);
-        // Hold block/crouch without constantly restarting it. It clamps at the final pose if key stays held.
         this.play(this.blocking ? 'block' : 'crouch', 0.08, false);
       } else if (Math.abs(this.velocity.x) > 0.08) {
         this.setState(STATE.WALK);
@@ -247,8 +246,9 @@ export class Fighter {
       if (correctSide && dist <= atk.range && opponent.health > 0) {
         const hit = opponent.receiveHit(atk, this);
         this.attackHasHit = true;
-        const hitPoint = new THREE.Vector3((this.group.position.x + opponent.group.position.x) * 0.5, 1.25, 0);
-        this.vfx?.spawnHit(hitPoint, new THREE.Vector3(this.facing, 0.15, 0), Boolean(hit?.blocked));
+        const frontZ = this.group.position.z + 0.65;
+        const hitPoint = new THREE.Vector3((this.group.position.x + opponent.group.position.x) * 0.5, 1.35, frontZ);
+        this.vfx?.spawnHit(hitPoint, new THREE.Vector3(this.facing, 0.15, 0.25), Boolean(hit?.blocked));
       }
     }
     if (t >= atk.startup + atk.active + atk.recovery) {
@@ -263,9 +263,7 @@ export class Fighter {
     const isBlocking = this.blocking && this.facing === -attacker.facing;
     const damage = isBlocking ? Math.ceil(atk.damage * 0.2) : atk.damage;
     this.health = Math.max(0, this.health - damage);
-    // No forced position pushback. This prevents characters being snapped/pushed back when crossing.
-    const dir = Math.sign(this.group.position.x - attacker.group.position.x) || attacker.facing;
-    this.velocity.x += dir * atk.push * 0.8;
+    // NO position push and NO knockback velocity. Crossing is allowed.
     this.stun = this.health <= 0 ? 0 : (isBlocking ? 0.12 : 0.32);
     this.hitStop = this.health <= 0 ? 0 : 0.035;
     attacker.hitStop = this.health <= 0 ? 0 : 0.025;
@@ -303,7 +301,7 @@ export class Fighter {
   }
 
   getFootPosition() {
-    return new THREE.Vector3(this.group.position.x, 0.05, this.group.position.z);
+    return new THREE.Vector3(this.group.position.x, 0.05, this.group.position.z + 0.45);
   }
 
   faceOpponent(opponent) {
