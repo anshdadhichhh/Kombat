@@ -11,6 +11,8 @@ export class FightingGame {
     this.loader = new AssetLoader();
     this.arena = { halfWidth: 7.5 };
     this.roundOver = false;
+    this.assetsReady = false;
+    this.loadingEl = null;
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x070912);
@@ -31,9 +33,21 @@ export class FightingGame {
 
   async init() {
     this.addLights();
-    await this.loadArena();
-    await this.loadFighters();
+    this.makeFallbackArena();
+    this.showLoading('Loading fighters...');
+
+    // Start rendering immediately so you never get a black screen while FBX files load.
     this.animate();
+
+    try {
+      await this.loadArena();
+      await this.loadFighters();
+      this.assetsReady = true;
+      this.hideLoading();
+    } catch (err) {
+      console.error('Game asset load failed:', err);
+      this.showLoading(`Asset load failed. Check console. ${err.message || err}`);
+    }
   }
 
   addLights() {
@@ -62,8 +76,7 @@ export class FightingGame {
       arena.scale.setScalar(0.01); // common FBX export scale; adjust if your arena is too small/large
       this.scene.add(arena);
     } catch (err) {
-      console.warn('Could not load /assets/arena/arena.fbx. Using fallback arena.', err);
-      this.makeFallbackArena();
+      console.warn('Could not load /assets/arena/arena.fbx. Keeping fallback arena.', err);
     }
   }
 
@@ -116,6 +129,10 @@ export class FightingGame {
   }
 
   update(dt) {
+    if (!this.assetsReady || !this.p1 || !this.p2) {
+      return;
+    }
+
     if (!this.roundOver) {
       this.p1.faceOpponent(this.p2);
       this.p2.faceOpponent(this.p1);
@@ -160,6 +177,25 @@ export class FightingGame {
       this.roundOver = true;
       text.textContent = this.p1.health <= 0 && this.p2.health <= 0 ? 'DRAW' : (this.p1.health <= 0 ? 'P2 WINS' : 'P1 WINS');
     }
+  }
+
+  showLoading(message) {
+    if (!this.loadingEl) {
+      this.loadingEl = document.createElement('div');
+      this.loadingEl.style.cssText = `
+        position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+        padding: 14px 18px; border: 1px solid #fff; border-radius: 8px;
+        background: rgba(0,0,0,.72); color: white; z-index: 20;
+        font: 16px system-ui, Arial; text-align: center; max-width: 80vw;
+      `;
+      document.body.appendChild(this.loadingEl);
+    }
+    this.loadingEl.textContent = message;
+  }
+
+  hideLoading() {
+    this.loadingEl?.remove();
+    this.loadingEl = null;
   }
 
   onResize() {
