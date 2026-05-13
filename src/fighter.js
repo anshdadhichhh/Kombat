@@ -62,26 +62,47 @@ export class Fighter {
   async loadAnimations() {
     const base = this.animationBaseUrl;
     const entries = Object.entries(DEFAULT_ANIMATION_MAP);
-    await Promise.all(entries.map(async ([name, file]) => {
-      try {
-        const clip = await this.assetLoader.loadAnimationClip(`${base}/${file}`, name);
-        const action = this.mixer.clipAction(clip);
-        action.clampWhenFinished = true;
-        this.actions.set(name, action);
-      } catch (_) {
-        // Missing animation is ok for a starter. The state machine still works.
-      }
+
+    await Promise.all(entries.map(async ([name, files]) => {
+      const fileList = Array.isArray(files) ? files : [files];
+      const loadedActions = [];
+
+      await Promise.all(fileList.map(async (file, index) => {
+        try {
+          const actionName = fileList.length === 1 ? name : `${name}_${index}`;
+          const clip = await this.assetLoader.loadAnimationClip(`${base}/${file}`, actionName);
+          const action = this.mixer.clipAction(clip);
+          action.clampWhenFinished = true;
+          loadedActions.push(action);
+        } catch (err) {
+          console.warn(`[${this.id}] Missing animation: ${base}/${file}`);
+        }
+      }));
+
+      if (loadedActions.length === 1) this.actions.set(name, loadedActions[0]);
+      if (loadedActions.length > 1) this.actions.set(name, loadedActions);
     }));
   }
 
-  play(name, fade = 0.08, loop = true) {
-    const next = this.actions.get(name);
-    if (!next || next === this.currentAction) return;
+  pickAction(name) {
+    const entry = this.actions.get(name);
+    if (!Array.isArray(entry)) return entry;
+    return entry[Math.floor(Math.random() * entry.length)];
+  }
+
+  play(name, fade = 0.08, loop = true, forceRestart = false) {
+    const next = this.pickAction(name);
+    if (!next) return;
+    if (!forceRestart && next === this.currentAction && next.isRunning()) return;
+
     next.reset();
     next.enabled = true;
+    next.setEffectiveWeight(1);
+    next.setEffectiveTimeScale(1);
     next.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
     next.fadeIn(fade).play();
-    if (this.currentAction) this.currentAction.fadeOut(fade);
+
+    if (this.currentAction && this.currentAction !== next) this.currentAction.fadeOut(fade);
     this.currentAction = next;
   }
 
@@ -106,7 +127,6 @@ export class Fighter {
     if (this.stun > 0) {
       this.stun -= dt;
       this.velocity.x = 0;
-      this.play('hit', 0.05, false);
       this.integrate(dt, arena);
       this.mixer?.update(dt);
       return;
@@ -170,7 +190,7 @@ export class Fighter {
     this.attackHasHit = false;
     this.velocity.x = 0;
     this.setState(STATE.ATTACK);
-    this.play(kind, 0.04, false);
+    this.play(kind, 0.04, false, true);
   }
 
   updateAttack(dt, opponent) {
@@ -200,8 +220,13 @@ export class Fighter {
     this.stun = isBlocking ? 0.12 : 0.32;
     this.hitStop = 0.05;
     attacker.hitStop = 0.035;
-    if (this.health <= 0) this.setState(STATE.KO);
-    else this.setState(STATE.HIT);
+    if (this.health <= 0) {
+      this.setState(STATE.KO);
+      this.play('ko', 0.05, false, true);
+    } else {
+      this.setState(STATE.HIT);
+      this.play('hit', 0.05, false, true);
+    }
   }
 
   integrate(dt, arena) {
