@@ -7,7 +7,7 @@ const STATE = {
 };
 
 export class Fighter {
-  constructor({ id, color, startX, modelUrl, animationBaseUrl, bindings, assetLoader, isAI = false }) {
+  constructor({ id, color, startX, modelUrl, animationBaseUrl, bindings, assetLoader, isAI = false, vfx = null }) {
     this.id = id;
     this.color = color;
     this.modelUrl = modelUrl;
@@ -15,7 +15,9 @@ export class Fighter {
     this.bindings = bindings;
     this.assetLoader = assetLoader;
     this.isAI = isAI;
+    this.vfx = vfx;
 
+    // Physics/controller root. Animation is applied only to the visual child.
     this.group = new THREE.Group();
     this.group.position.set(startX, 0, 0);
     this.velocity = new THREE.Vector3();
@@ -33,7 +35,9 @@ export class Fighter {
     this.blocking = false;
     this.koStarted = false;
 
-    this.speed = 3.2;
+    this.maxSpeed = 3.2;
+    this.acceleration = 22;
+    this.friction = 18;
     this.jumpVelocity = 6.2;
     this.gravity = -18;
     this.radius = 0.45;
@@ -43,6 +47,7 @@ export class Fighter {
     this.actions = new Map();
     this.currentAction = null;
     this.animationsReady = false;
+    this.visualBaseY = 0;
   }
 
   async load() {
@@ -57,10 +62,10 @@ export class Fighter {
     }
 
     this.visual = visual;
+    this.visualBaseY = visual.position.y;
     this.group.add(visual);
     this.mixer = new THREE.AnimationMixer(visual);
 
-    // Load idle first. Other animations load in the background for faster startup.
     await this.loadAnimationEntry('idle');
     this.play('idle', 0.05, true, true);
     this.loadRemainingAnimations().catch((err) => console.warn(`[${this.id}] Background animation loading failed`, err));
@@ -75,7 +80,6 @@ export class Fighter {
 
   async loadAnimationEntry(name) {
     if (this.actions.has(name)) return;
-
     const base = this.animationBaseUrl;
     const files = DEFAULT_ANIMATION_MAP[name];
     const fileList = Array.isArray(files) ? files : [files];
@@ -97,10 +101,7 @@ export class Fighter {
 
     if (loadedActions.length === 1) this.actions.set(name, loadedActions[0]);
     if (loadedActions.length > 1) this.actions.set(name, loadedActions);
-
-    if (name === 'idle' && !this.actions.has('idle')) {
-      console.error(`[${this.id}] Idle animation not loaded. Check exact filename and capitalization: ${base}/Idle.fbx`);
-    }
+    if (name === 'idle' && !this.actions.has('idle')) console.error(`[${this.id}] Idle animation not loaded: ${base}/Idle.fbx`);
   }
 
   pickAction(name) {
@@ -113,24 +114,21 @@ export class Fighter {
     const next = this.pickAction(name);
     if (!next) return false;
     if (!forceRestart && next === this.currentAction && next.isRunning()) return true;
-
     next.reset();
     next.enabled = true;
     next.setEffectiveWeight(1);
     next.setEffectiveTimeScale(1);
     next.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
     next.fadeIn(fade).play();
-
     if (this.currentAction && this.currentAction !== next) this.currentAction.fadeOut(fade);
     this.currentAction = next;
     return true;
   }
 
   update(dt, input, opponent, arena) {
-    // Always keep mixer running so KO/dying animation does not freeze.
     if (this.hitStop > 0) {
       this.hitStop -= dt;
-      this.mixer?.update(dt * 0.25);
+      this.updateMixer(dt * 0.25);
       return;
     }
 
@@ -140,9 +138,9 @@ export class Fighter {
         this.setState(STATE.KO);
         this.play('ko', 0.05, false, true);
       }
-      this.velocity.x = 0;
+      this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
       this.integrate(dt, arena);
-      this.mixer?.update(dt);
+      this.updateMixer(dt);
       return;
     }
 
@@ -152,16 +150,17 @@ export class Fighter {
 
     if (this.stun > 0) {
       this.stun -= dt;
-      this.velocity.x = 0;
+      this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
       this.integrate(dt, arena);
-      this.mixer?.update(dt);
+      this.updateMixer(dt);
       return;
     }
 
     if (this.state === STATE.ATTACK) {
       this.updateAttack(opponent);
+      this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
       this.integrate(dt, arena);
-      this.mixer?.update(dt);
+      this.updateMixer(dt);
       return;
     }
 
@@ -179,20 +178,27 @@ export class Fighter {
       this.velocity.y = this.jumpVelocity;
       this.isGrounded = false;
       this.setState(STATE.JUMP);
-      this.play('jump', 0.05, false, true);
+      this.play('jump', 0.05, false, true); // uses Jumping.fbx from animationMap.js
+      this.vfx?.spawnDust(this.getFootPosition(), 18);
     } else {
       let move = 0;
       if (left) move -= 1;
       if (right) move += 1;
-      this.velocity.x = move * this.speed;
+
+      if (move !== 0) {
+        const targetSpeed = move * this.maxSpeed;
+        this.velocity.x = THREE.MathUtils.damp(this.velocity.x, targetSpeed, this.acceleration, dt);
+      } else {
+        this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
+      }
 
       if (this.crouching) {
-        this.velocity.x *= 0.25;
+        this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction * 1.5, dt);
         this.setState(this.blocking ? STATE.BLOCK : STATE.CROUCH);
         this.play(this.blocking ? 'block' : 'crouch', 0.08);
-      } else if (Math.abs(move) > 0.01) {
+      } else if (Math.abs(this.velocity.x) > 0.08) {
         this.setState(STATE.WALK);
-        const movingTowardFacing = Math.sign(move) === this.facing;
+        const movingTowardFacing = Math.sign(this.velocity.x) === this.facing;
         this.play(movingTowardFacing ? 'walkForward' : 'walkBack', 0.08);
       } else {
         this.setState(STATE.IDLE);
@@ -201,7 +207,17 @@ export class Fighter {
     }
 
     this.integrate(dt, arena);
+    this.updateMixer(dt);
+  }
+
+  updateMixer(dt) {
     this.mixer?.update(dt);
+    // Hard lock animation visual child to controller root; prevents FBX root motion from snapping character back.
+    if (this.visual) {
+      this.visual.position.x = 0;
+      this.visual.position.z = 0;
+      this.visual.position.y = this.visualBaseY;
+    }
   }
 
   setState(s) {
@@ -215,7 +231,7 @@ export class Fighter {
     if (this.health <= 0) return;
     this.attackKind = kind;
     this.attackHasHit = false;
-    this.velocity.x = 0;
+    this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, 1 / 60);
     this.setState(STATE.ATTACK);
     this.play(kind, 0.04, false, true);
   }
@@ -224,19 +240,21 @@ export class Fighter {
     const atk = ATTACKS[this.attackKind];
     const t = this.stateTime;
     if (!atk) return;
-
     if (!this.attackHasHit && t >= atk.startup && t <= atk.startup + atk.active) {
       const dx = opponent.group.position.x - this.group.position.x;
       const dist = Math.abs(dx);
       const correctSide = Math.sign(dx) === this.facing;
-      const maxHitDistance = atk.range; // strict range. Do NOT add body radii; that caused long-distance hits.
-
-      if (correctSide && dist <= maxHitDistance && opponent.health > 0) {
-        opponent.receiveHit(atk, this);
+      if (correctSide && dist <= atk.range && opponent.health > 0) {
+        const hit = opponent.receiveHit(atk, this);
         this.attackHasHit = true;
+        const hitPoint = new THREE.Vector3(
+          (this.group.position.x + opponent.group.position.x) * 0.5,
+          1.25,
+          0
+        );
+        this.vfx?.spawnHit(hitPoint, new THREE.Vector3(this.facing, 0.15, 0), hit?.blocked ? 14 : 28);
       }
     }
-
     if (t >= atk.startup + atk.active + atk.recovery) {
       this.attackKind = null;
       this.setState(STATE.IDLE);
@@ -245,18 +263,15 @@ export class Fighter {
   }
 
   receiveHit(atk, attacker) {
-    if (this.health <= 0) return;
-
+    if (this.health <= 0) return { blocked: false, ko: true };
     const isBlocking = this.blocking && this.facing === -attacker.facing;
     const damage = isBlocking ? Math.ceil(atk.damage * 0.2) : atk.damage;
     this.health = Math.max(0, this.health - damage);
-
     const dir = Math.sign(this.group.position.x - attacker.group.position.x) || attacker.facing;
     this.group.position.x += dir * atk.push;
     this.stun = this.health <= 0 ? 0 : (isBlocking ? 0.12 : 0.32);
     this.hitStop = this.health <= 0 ? 0 : 0.035;
     attacker.hitStop = this.health <= 0 ? 0 : 0.025;
-
     if (this.health <= 0) {
       this.koStarted = true;
       this.setState(STATE.KO);
@@ -265,9 +280,11 @@ export class Fighter {
       this.setState(STATE.HIT);
       this.play('hit', 0.05, false, true);
     }
+    return { blocked: isBlocking, ko: this.health <= 0 };
   }
 
   integrate(dt, arena) {
+    const wasGrounded = this.isGrounded;
     this.velocity.y += this.gravity * dt;
     this.group.position.x += this.velocity.x * dt;
     this.group.position.y += this.velocity.y * dt;
@@ -276,7 +293,20 @@ export class Fighter {
       this.group.position.y = 0;
       this.velocity.y = 0;
       this.isGrounded = true;
+      if (!wasGrounded) {
+        this.vfx?.spawnDust(this.getFootPosition(), 18);
+        if (this.state === STATE.JUMP) {
+          this.setState(STATE.IDLE);
+          this.play('idle', 0.1);
+        }
+      }
+    } else {
+      this.isGrounded = false;
     }
+  }
+
+  getFootPosition() {
+    return new THREE.Vector3(this.group.position.x, 0.05, this.group.position.z);
   }
 
   faceOpponent(opponent) {
