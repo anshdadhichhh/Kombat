@@ -7,13 +7,14 @@ const STATE = {
 };
 
 export class Fighter {
-  constructor({ id, color, startX, modelUrl, animationBaseUrl, bindings, assetLoader }) {
+  constructor({ id, color, startX, modelUrl, animationBaseUrl, bindings, assetLoader, isAI = false }) {
     this.id = id;
     this.color = color;
     this.modelUrl = modelUrl;
     this.animationBaseUrl = animationBaseUrl;
     this.bindings = bindings;
     this.assetLoader = assetLoader;
+    this.isAI = isAI;
 
     this.group = new THREE.Group();
     this.group.position.set(startX, 0, 0);
@@ -30,6 +31,7 @@ export class Fighter {
     this.isGrounded = true;
     this.crouching = false;
     this.blocking = false;
+    this.koStarted = false;
 
     this.speed = 3.2;
     this.jumpVelocity = 6.2;
@@ -58,11 +60,9 @@ export class Fighter {
     this.group.add(visual);
     this.mixer = new THREE.AnimationMixer(visual);
 
-    // Load Idle.fbx first so the character immediately leaves T-pose.
+    // Load idle first. Other animations load in the background for faster startup.
     await this.loadAnimationEntry('idle');
     this.play('idle', 0.05, true, true);
-
-    // Load all remaining animations in the background so movement starts immediately.
     this.loadRemainingAnimations().catch((err) => console.warn(`[${this.id}] Background animation loading failed`, err));
   }
 
@@ -127,22 +127,28 @@ export class Fighter {
   }
 
   update(dt, input, opponent, arena) {
+    // Always keep mixer running so KO/dying animation does not freeze.
     if (this.hitStop > 0) {
       this.hitStop -= dt;
-      this.mixer?.update(dt * 0.1);
+      this.mixer?.update(dt * 0.25);
+      return;
+    }
+
+    if (this.health <= 0) {
+      if (!this.koStarted) {
+        this.koStarted = true;
+        this.setState(STATE.KO);
+        this.play('ko', 0.05, false, true);
+      }
+      this.velocity.x = 0;
+      this.integrate(dt, arena);
+      this.mixer?.update(dt);
       return;
     }
 
     this.stateTime += dt;
     this.crouching = input.isDown(this.bindings.down);
     this.blocking = this.crouching && opponent?.state === STATE.ATTACK;
-
-    if (this.health <= 0) {
-      this.setState(STATE.KO);
-      this.play('ko', 0.1, false);
-      this.mixer?.update(dt);
-      return;
-    }
 
     if (this.stun > 0) {
       this.stun -= dt;
@@ -153,7 +159,7 @@ export class Fighter {
     }
 
     if (this.state === STATE.ATTACK) {
-      this.updateAttack(dt, opponent);
+      this.updateAttack(opponent);
       this.integrate(dt, arena);
       this.mixer?.update(dt);
       return;
@@ -206,6 +212,7 @@ export class Fighter {
   }
 
   startAttack(kind) {
+    if (this.health <= 0) return;
     this.attackKind = kind;
     this.attackHasHit = false;
     this.velocity.x = 0;
@@ -213,17 +220,23 @@ export class Fighter {
     this.play(kind, 0.04, false, true);
   }
 
-  updateAttack(dt, opponent) {
+  updateAttack(opponent) {
     const atk = ATTACKS[this.attackKind];
     const t = this.stateTime;
+    if (!atk) return;
+
     if (!this.attackHasHit && t >= atk.startup && t <= atk.startup + atk.active) {
-      const dist = Math.abs(opponent.group.position.x - this.group.position.x);
-      const correctSide = Math.sign(opponent.group.position.x - this.group.position.x) === this.facing;
-      if (correctSide && dist <= atk.range + this.radius + opponent.radius) {
+      const dx = opponent.group.position.x - this.group.position.x;
+      const dist = Math.abs(dx);
+      const correctSide = Math.sign(dx) === this.facing;
+      const maxHitDistance = atk.range; // strict range. Do NOT add body radii; that caused long-distance hits.
+
+      if (correctSide && dist <= maxHitDistance && opponent.health > 0) {
         opponent.receiveHit(atk, this);
         this.attackHasHit = true;
       }
     }
+
     if (t >= atk.startup + atk.active + atk.recovery) {
       this.attackKind = null;
       this.setState(STATE.IDLE);
@@ -232,15 +245,20 @@ export class Fighter {
   }
 
   receiveHit(atk, attacker) {
+    if (this.health <= 0) return;
+
     const isBlocking = this.blocking && this.facing === -attacker.facing;
     const damage = isBlocking ? Math.ceil(atk.damage * 0.2) : atk.damage;
     this.health = Math.max(0, this.health - damage);
+
     const dir = Math.sign(this.group.position.x - attacker.group.position.x) || attacker.facing;
     this.group.position.x += dir * atk.push;
-    this.stun = isBlocking ? 0.12 : 0.32;
-    this.hitStop = 0.05;
-    attacker.hitStop = 0.035;
+    this.stun = this.health <= 0 ? 0 : (isBlocking ? 0.12 : 0.32);
+    this.hitStop = this.health <= 0 ? 0 : 0.035;
+    attacker.hitStop = this.health <= 0 ? 0 : 0.025;
+
     if (this.health <= 0) {
+      this.koStarted = true;
       this.setState(STATE.KO);
       this.play('ko', 0.05, false, true);
     } else {
