@@ -16,36 +16,46 @@
     <div id="hud">
       <div class="barWrap"><span>P1</span><div class="bar"><div id="p1Health" class="fill"></div></div></div>
       <div id="roundText">ROUND 1</div>
-      <div class="barWrap right"><span>AI</span><div class="bar"><div id="p2Health" class="fill"></div></div></div>
+      <div class="barWrap right"><span>AI RIGHT</span><div class="bar"><div id="p2Health" class="fill"></div></div></div>
     </div>
 
     <button id="replayBtn">Replay</button>
 
     <div id="arenaControls">
-      <b>Arena</b>
-      <label>Model
-        <select id="arenaSelect">
-          <option value="arena1.glb">arena1.glb</option>
-          <option value="arena2.glb">arena2.glb</option>
-        </select>
-        <span></span>
-      </label>
-      <label>Arena Size <input id="arenaScale" type="range" min="0.01" max="100" step="0.05" value="1"><span id="arenaScaleValue">1.00</span></label>
-      <label>Arena X <input id="arenaX" type="range" min="-1000" max="1000" step="1" value="0"><span id="arenaXValue">0.0</span></label>
-      <label>Arena Y <input id="arenaY" type="range" min="-1000" max="1000" step="1" value="0"><span id="arenaYValue">0.0</span></label>
-      <label>Arena Z <input id="arenaZ" type="range" min="-1000" max="1000" step="1" value="0"><span id="arenaZValue">0.0</span></label>
+      <b>Arena Transform</b>
+      <label>Model <select id="arenaSelect"><option value="arena1.glb">arena1.glb</option><option value="arena2.glb">arena2.glb</option></select><span></span></label>
+      <label>Scale X <input id="arenaScaleX" type="range" min="0.01" max="100" step="0.05" value="1"><span id="arenaScaleXValue">1.00</span></label>
+      <label>Scale Y <input id="arenaScaleY" type="range" min="0.01" max="100" step="0.05" value="1"><span id="arenaScaleYValue">1.00</span></label>
+      <label>Scale Z <input id="arenaScaleZ" type="range" min="0.01" max="100" step="0.05" value="1"><span id="arenaScaleZValue">1.00</span></label>
+      <label>Pos X <input id="arenaX" type="range" min="-1000" max="1000" step="1" value="0"><span id="arenaXValue">0.0</span></label>
+      <label>Pos Y <input id="arenaY" type="range" min="-1000" max="1000" step="1" value="0"><span id="arenaYValue">0.0</span></label>
+      <label>Pos Z <input id="arenaZ" type="range" min="-1000" max="1000" step="1" value="0"><span id="arenaZValue">0.0</span></label>
+      <label>Rot X <input id="arenaRotX" type="range" min="-180" max="180" step="1" value="0"><span id="arenaRotXValue">0</span></label>
+      <label>Rot Y <input id="arenaRotY" type="range" min="-180" max="180" step="1" value="0"><span id="arenaRotYValue">0</span></label>
+      <label>Rot Z <input id="arenaRotZ" type="range" min="-180" max="180" step="1" value="0"><span id="arenaRotZValue">0</span></label>
       <hr />
-      <b>Characters</b>
-      <label>Char Size <input id="charScale" type="range" min="0.1" max="10" step="0.05" value="1"><span id="charScaleValue">1.00</span></label>
-      <label>Char Y <input id="charY" type="range" min="-20" max="20" step="0.1" value="0"><span id="charYValue">0.0</span></label>
-      <label>Char Z <input id="charZ" type="range" min="-20" max="20" step="0.1" value="0"><span id="charZValue">0.0</span></label>
-      <label>P1 X <input id="p1X" type="range" min="-30" max="30" step="0.1" value="-2.4"><span id="p1XValue">-2.4</span></label>
-      <label>AI X <input id="p2X" type="range" min="-30" max="30" step="0.1" value="2.4"><span id="p2XValue">2.4</span></label>
+      <b>P1 Transform</b>
+      <label>Scale <input id="p1Scale" type="range" min="0.1" max="10" step="0.05" value="2.05"><span id="p1ScaleValue">2.05</span></label>
+      <label>Pos X <input id="p1X" type="range" min="-100" max="100" step="0.1" value="-2.4"><span id="p1XValue">-2.4</span></label>
+      <label>Pos Y <input id="p1Y" type="range" min="-50" max="50" step="0.1" value="0.5"><span id="p1YValue">0.5</span></label>
+      <label>Pos Z <input id="p1Z" type="range" min="-100" max="100" step="0.1" value="0"><span id="p1ZValue">0.0</span></label>
+      <label>Rot X <input id="p1RotX" type="range" min="-180" max="180" step="1" value="0"><span id="p1RotXValue">0</span></label>
+      <label>Rot Y <input id="p1RotY" type="range" min="-180" max="180" step="1" value="0"><span id="p1RotYValue">0</span></label>
+      <label>Rot Z <input id="p1RotZ" type="range" min="-180" max="180" step="1" value="0"><span id="p1RotZValue">0</span></label>
+      <hr />
+      <b>AI Right Transform</b>
+      <label>Scale <input id="p2Scale" type="range" min="0.1" max="10" step="0.05" value="2.05"><span id="p2ScaleValue">2.05</span></label>
+      <label>Pos X <input id="p2X" type="range" min="-100" max="100" step="0.1" value="2.4"><span id="p2XValue">2.4</span></label>
+      <label>Pos Y <input id="p2Y" type="range" min="-50" max="50" step="0.1" value="0.5"><span id="p2YValue">0.5</span></label>
+      <label>Pos Z <input id="p2Z" type="range" min="-100" max="100" step="0.1" value="0"><span id="p2ZValue">0.0</span></label>
+      <label>Rot X <input id="p2RotX" type="range" min="-180" max="180" step="1" value="0"><span id="p2RotXValue">0</span></label>
+      <label>Rot Y <input id="p2RotY" type="range" min="-180" max="180" step="1" value="0"><span id="p2RotYValue">0</span></label>
+      <label>Rot Z <input id="p2RotZ" type="range" min="-180" max="180" step="1" value="0"><span id="p2RotZValue">0</span></label>
     </div>
 
     <div id="help">
       <b>P1:</b> A/D move, W jump, S block/crouch, Q or Z punch, E or C kick, X heavy<br/>
-      <b>AI:</b> automatic opponent · fighters can cross/pass each other
+      <b>AI:</b> right-side opponent · no body push/collision separation
     </div>
 
     <script type="module" src="/src/main.js"></script>
