@@ -1,6 +1,15 @@
-# Arena file
+# Arena files
 
-Put ONE arena file here and rename it to one of these exact names:
+Put your two arena models here with these exact names:
+
+```text
+arena1.glb
+arena2.glb
+```
+
+The in-game Arena dropdown switches between them.
+
+Fallback supported names are also checked:
 
 ```text
 arena.glb
@@ -8,12 +17,4 @@ arena.gltf
 arena.fbx
 ```
 
-Recommended: use `arena.glb` if possible. GLB usually loads better in Three.js than FBX.
-
-The game tries loading in this order:
-
-1. `public/assets/arena/arena.glb`
-2. `public/assets/arena/arena.gltf`
-3. `public/assets/arena/arena.fbx`
-
-If none exist, the fallback grid arena is used.
+Recommended: GLB is best for Three.js.
