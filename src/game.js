@@ -17,6 +17,7 @@ export class FightingGame {
     this.arena = { halfWidth: 7.5 };
     this.roundOver = false;
     this.assetsReady = false;
+    this.fightStarted = false;
     this.loadingEl = null;
     this.fallbackArena = null;
     this.loadedArena = null;
@@ -27,9 +28,9 @@ export class FightingGame {
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x8fb6e8);
-    this.scene.fog = new THREE.Fog(0x8fb6e8, 80, 260);
+    this.scene.fog = null; // no fog clipping huge arena environments
 
-    this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.05, 1000);
+    this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 10000);
     this.camera.position.set(0, 3.2, 11.0);
     this.camera.lookAt(0, 1.15, 0);
 
@@ -45,30 +46,31 @@ export class FightingGame {
     this.setupArenaSliders();
     this.setupReplayButton();
     this.setupArenaSelect();
+    this.setupPlayButton();
   }
 
   async init() {
     this.addEnvironment();
     this.addLights();
     this.makeFallbackArena();
-    this.showLoading('Loading fighters and arena...');
+    this.showBoot('Loading all assets...', false);
     this.animate();
     try {
       await Promise.all([this.loadArena(), this.loadFighters()]);
       this.assetsReady = true;
-      this.hideLoading();
-      console.log('Game ready. arena1.glb/arena2.glb supported. Animations preserved; only locomotion root X/Z is cleaned.');
+      this.showBoot('Assets loaded. Press Play to start.', true);
+      console.log('Assets loaded. Press Play. Characters can cross/pass each other now.');
     } catch (err) {
       console.error('Game asset load failed:', err);
-      this.showLoading(`Asset load failed. Check console. ${err.message || err}`);
+      this.showBoot(`Asset load failed. Check console. ${err.message || err}`, false);
     }
   }
 
   addEnvironment() {
-    const back = new THREE.Mesh(new THREE.PlaneGeometry(400, 200), new THREE.MeshBasicMaterial({ color: 0x8fb6e8, depthWrite: false }));
-    back.position.set(0, 40, -120);
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(5000, 2500), new THREE.MeshBasicMaterial({ color: 0x8fb6e8, depthWrite: false }));
+    back.position.set(0, 500, -1600);
     this.scene.add(back);
-    const base = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x6f7f90, roughness: 0.9 }));
+    const base = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), new THREE.MeshStandardMaterial({ color: 0x6f7f90, roughness: 0.9 }));
     base.rotation.x = -Math.PI / 2;
     base.position.y = -0.55;
     this.scene.add(base);
@@ -82,7 +84,7 @@ export class FightingGame {
     const fill = new THREE.DirectionalLight(0xdde8ff, 1.6);
     fill.position.set(5, 4, 5);
     this.scene.add(fill);
-    const front = new THREE.PointLight(0xffffff, 1.4, 60);
+    const front = new THREE.PointLight(0xffffff, 1.4, 600);
     front.position.set(0, 3, 6);
     this.scene.add(front);
   }
@@ -149,11 +151,9 @@ export class FightingGame {
     object.position.x -= center.x;
     object.position.z -= center.z;
     object.position.y -= box.min.y;
-    const targetWidth = 16;
-    const targetDepth = 7;
-    const scaleX = size.x > 0.001 ? targetWidth / size.x : 1;
-    const scaleZ = size.z > 0.001 ? targetDepth / size.z : 1;
-    object.scale.multiplyScalar(Math.min(scaleX, scaleZ, 3.0));
+    // Keep the full environment, but don't force huge mountain maps down too aggressively.
+    const maxDim = Math.max(size.x, size.z);
+    if (maxDim > 0.001) object.scale.multiplyScalar(Math.min(40 / maxDim, 1));
     this.groundObject(object, 0);
   }
 
@@ -188,15 +188,43 @@ export class FightingGame {
     const select = document.getElementById('arenaSelect');
     if (!select) return;
     select.addEventListener('change', async () => {
-      this.showLoading(`Loading ${select.value}...`);
+      this.showBoot(`Loading ${select.value}...`, false);
       await this.loadArena(select.value);
-      this.hideLoading();
+      if (this.assetsReady && !this.fightStarted) this.showBoot('Assets loaded. Press Play to start.', true);
+      else this.hideBoot();
     });
   }
 
   setupReplayButton() {
     const btn = document.getElementById('replayBtn');
     if (btn) btn.addEventListener('click', () => this.resetRound());
+  }
+
+  setupPlayButton() {
+    const btn = document.getElementById('playBtn');
+    if (btn) btn.addEventListener('click', () => this.startFight());
+  }
+
+  startFight() {
+    if (!this.assetsReady) return;
+    this.fightStarted = true;
+    this.hideBoot();
+    this.clock.getDelta();
+  }
+
+  showBoot(message, showPlay) {
+    const boot = document.getElementById('boot');
+    const msg = document.getElementById('bootMessage');
+    const btn = document.getElementById('playBtn');
+    if (!boot) return;
+    boot.style.display = 'grid';
+    if (msg) msg.textContent = message;
+    if (btn) btn.style.display = showPlay ? 'inline-block' : 'none';
+  }
+
+  hideBoot() {
+    const boot = document.getElementById('boot');
+    if (boot) boot.style.display = 'none';
   }
 
   captureArenaBaseTransform(object) {
@@ -218,13 +246,10 @@ export class FightingGame {
     const x = this.sliderNumber('arenaX', 0);
     const y = this.sliderNumber('arenaY', 0);
     const z = this.sliderNumber('arenaZ', 0);
-
     object.scale.copy(this.arenaBaseScale).multiplyScalar(scale);
     object.position.copy(this.arenaBasePosition).add(new THREE.Vector3(x, 0, z));
-    // Re-ground after every scale so the bottom does not disappear below the floor. Then apply user Y offset.
     this.groundObject(object, 0);
     object.position.y += y;
-
     this.setSliderLabel('arenaScaleValue', scale.toFixed(2));
     this.setSliderLabel('arenaXValue', x.toFixed(1));
     this.setSliderLabel('arenaYValue', y.toFixed(1));
@@ -257,9 +282,17 @@ export class FightingGame {
 
   update(dt) {
     if (!this.assetsReady || !this.p1 || !this.p2) return;
+    if (!this.fightStarted) {
+      this.p1.play('idle', 0.12);
+      this.p2.play('idle', 0.12);
+      this.p1.mixer?.update(dt);
+      this.p2.mixer?.update(dt);
+      return;
+    }
+
     this.p1.faceOpponent(this.p2);
     this.p2.faceOpponent(this.p1);
-    this.resolveBodyPush();
+    // No body push: fighters are allowed to pass/cross through each other.
     if (!this.roundOver) {
       this.aiInput.update(dt, this.p2, this.p1);
       this.p1.update(dt, this.input, this.p2, this.arena);
@@ -271,19 +304,6 @@ export class FightingGame {
     }
     this.updateHud();
     if (!this.fixedCamera) this.updateCamera(dt);
-  }
-
-  resolveBodyPush() {
-    if (this.p1.health <= 0 || this.p2.health <= 0) return;
-    const minDist = this.p1.radius + this.p2.radius;
-    const dx = this.p2.group.position.x - this.p1.group.position.x;
-    const dist = Math.abs(dx);
-    if (dist > 0 && dist < minDist) {
-      const overlap = minDist - dist;
-      const dir = Math.sign(dx);
-      this.p1.group.position.x -= dir * overlap * 0.5;
-      this.p2.group.position.x += dir * overlap * 0.5;
-    }
   }
 
   updateCamera(dt) {
@@ -333,16 +353,8 @@ export class FightingGame {
     this.updateHud();
   }
 
-  showLoading(message) {
-    if (!this.loadingEl) {
-      this.loadingEl = document.createElement('div');
-      this.loadingEl.className = 'loadingBox';
-      document.body.appendChild(this.loadingEl);
-    }
-    this.loadingEl.textContent = message;
-  }
-
-  hideLoading() { this.loadingEl?.remove(); this.loadingEl = null; }
+  showLoading(message) { this.showBoot(message, false); }
+  hideLoading() { this.hideBoot(); }
 
   onResize() {
     this.camera.aspect = window.innerWidth / window.innerHeight;
