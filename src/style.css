@@ -75,7 +75,7 @@ canvas { display: block; }
   align-items: center;
   margin: 7px 0;
 }
-#arenaControls input { width: 100%; }
+#arenaControls input, #arenaControls select { width: 100%; min-width: 0; }
 #arenaControls span { text-align: right; font-variant-numeric: tabular-nums; }
 #replayBtn {
   display: none;
