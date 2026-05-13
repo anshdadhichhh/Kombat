@@ -1,15 +1,19 @@
-# Arena FBX
+# Arena file
 
-Put your arena FBX here and name it:
+Put ONE arena file here and rename it to one of these exact names:
 
 ```text
+arena.glb
+arena.gltf
 arena.fbx
 ```
 
-Expected path used by the game:
+Recommended: use `arena.glb` if possible. GLB usually loads better in Three.js than FBX.
 
-```text
-public/assets/arena/arena.fbx
-```
+The game tries loading in this order:
 
-If your arena loads too small or too large, edit `arena.scale.setScalar(0.01)` in `src/game.js`.
+1. `public/assets/arena/arena.glb`
+2. `public/assets/arena/arena.gltf`
+3. `public/assets/arena/arena.fbx`
+
+If none exist, the fallback grid arena is used.
