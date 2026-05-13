@@ -22,7 +22,9 @@ export class FightingGame {
     this.loadedArena = null;
     this.arenaRoot = null;
     this.transformControls = null;
+    this.transformHelper = null;
     this.syncingArenaUi = false;
+    this.skyPlane = null;
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x87a9c7);
@@ -49,6 +51,7 @@ export class FightingGame {
     this.setupPlayButton();
     this.setupSliders();
     this.setupTransformButtons();
+    this.setupBackgroundControls();
   }
 
   async init() {
@@ -84,9 +87,41 @@ export class FightingGame {
   }
 
   addSkyFallback() {
-    const sky = new THREE.Mesh(new THREE.PlaneGeometry(300, 140), new THREE.MeshBasicMaterial({ color: 0x91b7d5, depthWrite: false }));
-    sky.position.set(0, 35, -90);
-    this.scene.add(sky);
+    this.skyPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(300, 140),
+      new THREE.MeshBasicMaterial({ color: 0x91b7d5, depthWrite: false })
+    );
+    this.skyPlane.position.set(0, 35, -90);
+    this.scene.add(this.skyPlane);
+  }
+
+  setupBackgroundControls() {
+    const file = document.getElementById('backgroundImage');
+    if (file) {
+      file.addEventListener('change', () => {
+        const picked = file.files?.[0];
+        if (!picked) return;
+        const url = URL.createObjectURL(picked);
+        this.setBackgroundImage(url, () => URL.revokeObjectURL(url));
+      });
+    }
+    const path = document.getElementById('backgroundPath');
+    const btn = document.getElementById('loadBackgroundPath');
+    if (path && btn) btn.addEventListener('click', () => this.setBackgroundImage(path.value));
+  }
+
+  setBackgroundImage(url, onLoadDone = null) {
+    if (!url) return;
+    new THREE.TextureLoader().load(url, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = this.renderer.capabilities.getMaxAnisotropy?.() || 1;
+      tex.needsUpdate = true;
+      if (!this.skyPlane) this.addSkyFallback();
+      this.skyPlane.material.map = tex;
+      this.skyPlane.material.color.set(0xffffff);
+      this.skyPlane.material.needsUpdate = true;
+      onLoadDone?.();
+    }, undefined, (err) => console.warn('Background image failed to load:', url, err));
   }
 
   setupTransformControls() {
@@ -94,7 +129,10 @@ export class FightingGame {
     this.transformControls.setSize(1.15);
     this.transformControls.setMode('translate');
     this.transformControls.addEventListener('objectChange', () => this.syncArenaUiFromObject());
-    this.scene.add(this.transformControls);
+
+    // Newer Three.js TransformControls is not directly addable; add its Object3D helper.
+    this.transformHelper = this.transformControls.getHelper ? this.transformControls.getHelper() : this.transformControls;
+    this.scene.add(this.transformHelper);
   }
 
   setupTransformButtons() {
@@ -216,13 +254,13 @@ export class FightingGame {
     a.scale.setScalar(s);
     a.position.set(x, y, z);
     a.rotation.set(THREE.MathUtils.degToRad(rx), THREE.MathUtils.degToRad(ry), THREE.MathUtils.degToRad(rz));
-    this.label('arenaScaleValue', s.toFixed(2));
-    this.label('arenaXValue', x.toFixed(1));
-    this.label('arenaYValue', y.toFixed(1));
-    this.label('arenaZValue', z.toFixed(1));
-    this.label('arenaRotXValue', rx.toFixed(0));
-    this.label('arenaRotYValue', ry.toFixed(0));
-    this.label('arenaRotZValue', rz.toFixed(0));
+    this.label('arenaScaleValue', s.toFixed(3));
+    this.label('arenaXValue', x.toFixed(2));
+    this.label('arenaYValue', y.toFixed(2));
+    this.label('arenaZValue', z.toFixed(2));
+    this.label('arenaRotXValue', rx.toFixed(1));
+    this.label('arenaRotYValue', ry.toFixed(1));
+    this.label('arenaRotZValue', rz.toFixed(1));
   }
 
   syncArenaUiFromObject() {
