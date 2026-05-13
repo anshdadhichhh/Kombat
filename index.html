@@ -11,19 +11,19 @@
     </style>
   </head>
   <body>
-    <div id="boot"><div style="text-align:center"><div id="bootMessage">Building arena and loading fighters...</div><button id="playBtn">PLAY</button></div></div>
+    <div id="boot"><div style="text-align:center"><div id="bootMessage">Building rocky arena and loading fighters...</div><button id="playBtn">PLAY</button></div></div>
 
     <div id="hud">
-      <div class="barWrap"><span>AI LEFT</span><div class="bar"><div id="p2Health" class="fill"></div></div></div>
+      <div class="barWrap"><span>P1 LEFT</span><div class="bar"><div id="p1Health" class="fill"></div></div></div>
       <div id="roundText">ROUND 1</div>
-      <div class="barWrap right"><span>P1 RIGHT</span><div class="bar"><div id="p1Health" class="fill"></div></div></div>
+      <div class="barWrap right"><span>AI RIGHT</span><div class="bar"><div id="p2Health" class="fill"></div></div></div>
     </div>
 
     <button id="replayBtn">Replay</button>
 
     <div id="help">
-      <b>P1 RIGHT:</b> A/D move, W jump, S block/crouch, Q or Z punch, E or C kick, X heavy<br/>
-      <b>AI LEFT:</b> automatic opponent · no collision separation · procedural arena
+      <b>P1 LEFT:</b> A/D move, W jump, S block/crouch, Q or Z punch, E or C kick, X heavy<br/>
+      <b>AI RIGHT:</b> automatic opponent · no collision separation · rocky Tekken-style arena
     </div>
 
     <script type="module" src="/src/main.js"></script>
