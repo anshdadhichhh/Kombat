@@ -55,8 +55,12 @@ export class Fighter {
     this.group.add(visual);
 
     this.mixer = new THREE.AnimationMixer(visual);
-    await this.loadAnimations();
-    this.play('idle', 0.1);
+
+    // Do not block the whole game while large FBX animation files load.
+    // The character mesh appears first, then animations attach when ready.
+    this.loadAnimations()
+      .then(() => this.play('idle', 0.1))
+      .catch((err) => console.warn(`[${this.id}] Animation loading failed`, err));
   }
 
   async loadAnimations() {
