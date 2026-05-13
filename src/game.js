@@ -14,18 +14,17 @@ export class FightingGame {
     this.input = new KeyboardInput();
     this.aiInput = new AIInput(P2_BINDINGS);
     this.loader = new AssetLoader();
-    this.arena = { halfWidth: 8.5 };
+    this.arena = { halfWidth: 9.5 };
     this.roundOver = false;
     this.assetsReady = false;
     this.fightStarted = false;
-    this.fixedCamera = true;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x101827);
-    this.scene.fog = new THREE.Fog(0x101827, 22, 80);
+    this.scene.background = new THREE.Color(0x87a9c7);
+    this.scene.fog = new THREE.Fog(0x87a9c7, 28, 95);
 
     this.camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.05, 500);
-    this.camera.position.set(0, 4.1, 11.2);
+    this.camera.position.set(0, 3.8, 12.5);
     this.camera.lookAt(0, 1.25, 0);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -42,144 +41,127 @@ export class FightingGame {
   }
 
   async init() {
-    this.showBoot('Building arena and loading all fighter assets...', false);
+    this.showBoot('Building Tekken-style arena and loading fighters...', false);
     this.buildArena();
     this.animate();
     try {
       await this.loadFighters();
       this.assetsReady = true;
       this.showBoot('ALL ASSETS LOADED. Press PLAY to start.', true);
-      console.log('ALL ASSETS LOADED: procedural arena + both fighter meshes + all configured animations.');
+      console.log('ALL ASSETS LOADED: procedural rocky arena + both fighter meshes + all configured animations.');
     } catch (err) {
       console.error('Game asset load failed:', err);
       this.showBoot(`Asset load failed. Check console. ${err.message || err}`, false);
     }
   }
 
+  makeRockMaterial(base = 0x5c5148) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 512;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#5b534a';
+    ctx.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 2600; i++) {
+      const v = 75 + Math.random() * 80;
+      ctx.fillStyle = `rgba(${v},${v * 0.95},${v * 0.82},${0.08 + Math.random() * 0.18})`;
+      ctx.fillRect(Math.random() * 512, Math.random() * 512, 1 + Math.random() * 5, 1 + Math.random() * 5);
+    }
+    for (let i = 0; i < 45; i++) {
+      ctx.strokeStyle = `rgba(30,25,20,${0.15 + Math.random() * 0.25})`;
+      ctx.lineWidth = 1 + Math.random() * 3;
+      ctx.beginPath();
+      ctx.moveTo(Math.random() * 512, Math.random() * 512);
+      ctx.lineTo(Math.random() * 512, Math.random() * 512);
+      ctx.stroke();
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(5, 3);
+    return new THREE.MeshStandardMaterial({ color: base, map: tex, roughness: 0.88, metalness: 0.02 });
+  }
+
   buildArena() {
     this.addLights();
-    this.addStage();
-    this.addRopesAndPosts();
-    this.addBackdrop();
-    this.addProps();
+    this.addSkyBackdrop();
+    this.addRockGround();
+    this.addRockFormations();
+    this.addAtmosphereProps();
   }
 
   addLights() {
-    this.scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x302014, 1.8));
-
-    const key = new THREE.DirectionalLight(0xffffff, 2.5);
-    key.position.set(-5, 9, 7);
-    key.castShadow = true;
-    key.shadow.mapSize.set(2048, 2048);
-    key.shadow.camera.left = -14;
-    key.shadow.camera.right = 14;
-    key.shadow.camera.top = 14;
-    key.shadow.camera.bottom = -14;
-    this.scene.add(key);
-
-    const fill = new THREE.DirectionalLight(0x88aaff, 1.4);
-    fill.position.set(6, 5, 6);
-    this.scene.add(fill);
-
-    const colors = [0xffcc66, 0x66ccff, 0xff6688, 0xffffff];
-    [-6, -2, 2, 6].forEach((x, i) => {
-      const spot = new THREE.SpotLight(colors[i], 2.2, 28, Math.PI / 5, 0.45, 1.2);
-      spot.position.set(x, 8, 4.5);
-      spot.target.position.set(0, 0, 0);
-      this.scene.add(spot, spot.target);
-    });
+    this.scene.add(new THREE.HemisphereLight(0xdcefff, 0x4b3a2c, 1.9));
+    const sun = new THREE.DirectionalLight(0xfff0d2, 3.0);
+    sun.position.set(-8, 11, 7);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -20;
+    sun.shadow.camera.right = 20;
+    sun.shadow.camera.top = 20;
+    sun.shadow.camera.bottom = -20;
+    this.scene.add(sun);
+    const rim = new THREE.DirectionalLight(0x83b9ff, 1.1);
+    rim.position.set(8, 5, -6);
+    this.scene.add(rim);
   }
 
-  addStage() {
-    const floorMat = new THREE.MeshStandardMaterial({ color: 0x2f3542, roughness: 0.55, metalness: 0.08 });
-    const trimMat = new THREE.MeshStandardMaterial({ color: 0xffc857, roughness: 0.35, metalness: 0.25 });
-    const mat = new THREE.MeshStandardMaterial({ color: 0x202633, roughness: 0.65 });
+  addSkyBackdrop() {
+    const sky = new THREE.Mesh(new THREE.PlaneGeometry(90, 42), new THREE.MeshBasicMaterial({ color: 0x91b7d5, depthWrite: false }));
+    sky.position.set(0, 15, -26);
+    this.scene.add(sky);
+    const mountainMat = new THREE.MeshStandardMaterial({ color: 0x374055, roughness: 0.9 });
+    for (let i = 0; i < 13; i++) {
+      const h = 3 + Math.random() * 7;
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(2.6 + Math.random() * 2.8, h, 5), mountainMat);
+      cone.position.set(-25 + i * 4.4, h / 2 - 1.3, -21 - Math.random() * 3);
+      cone.rotation.y = Math.random() * Math.PI;
+      this.scene.add(cone);
+    }
+  }
 
-    const base = new THREE.Mesh(new THREE.BoxGeometry(20, 0.65, 10), mat);
-    base.position.y = -0.42;
-    base.receiveShadow = true;
-    this.scene.add(base);
-
-    const top = new THREE.Mesh(new THREE.BoxGeometry(18.2, 0.18, 8.2), floorMat);
-    top.position.y = 0.02;
-    top.receiveShadow = true;
-    this.scene.add(top);
-
-    const center = new THREE.Mesh(new THREE.CircleGeometry(2.1, 64), new THREE.MeshStandardMaterial({ color: 0x3f485e, roughness: 0.55 }));
+  addRockGround() {
+    const ground = new THREE.Mesh(new THREE.BoxGeometry(22, 0.45, 9.5, 12, 1, 6), this.makeRockMaterial());
+    ground.position.y = -0.22;
+    ground.receiveShadow = true;
+    this.scene.add(ground);
+    const center = new THREE.Mesh(new THREE.CircleGeometry(3.0, 64), new THREE.MeshStandardMaterial({ color: 0x6b6255, roughness: 0.9 }));
     center.rotation.x = -Math.PI / 2;
-    center.position.y = 0.125;
+    center.position.y = 0.025;
     this.scene.add(center);
-
-    const lineMat = new THREE.MeshBasicMaterial({ color: 0xffd166 });
-    const line1 = new THREE.Mesh(new THREE.BoxGeometry(18.0, 0.012, 0.05), lineMat);
-    line1.position.y = 0.14;
-    const line2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 8.0), lineMat);
-    line2.position.y = 0.145;
-    this.scene.add(line1, line2);
-
-    const frontTrim = new THREE.Mesh(new THREE.BoxGeometry(20.4, 0.25, 0.25), trimMat);
-    frontTrim.position.set(0, -0.08, 5.12);
-    const backTrim = frontTrim.clone(); backTrim.position.z = -5.12;
-    const leftTrim = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 10.4), trimMat); leftTrim.position.set(-10.12, -0.08, 0);
-    const rightTrim = leftTrim.clone(); rightTrim.position.x = 10.12;
-    this.scene.add(frontTrim, backTrim, leftTrim, rightTrim);
+    const dirt = new THREE.Mesh(new THREE.RingGeometry(3.4, 6.6, 96), new THREE.MeshStandardMaterial({ color: 0x4f463c, roughness: 0.95 }));
+    dirt.rotation.x = -Math.PI / 2;
+    dirt.position.y = 0.018;
+    this.scene.add(dirt);
   }
 
-  addRopesAndPosts() {
-    const postMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.35, metalness: 0.35 });
-    const ropeMat = new THREE.MeshStandardMaterial({ color: 0xff365e, roughness: 0.4, metalness: 0.05 });
-    const corners = [[-9.1, -4.1], [9.1, -4.1], [-9.1, 4.1], [9.1, 4.1]];
-    corners.forEach(([x, z]) => {
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 2.4, 16), postMat);
-      post.position.set(x, 1.2, z);
-      post.castShadow = true;
-      this.scene.add(post);
-    });
-    [0.85, 1.35, 1.85].forEach((y) => {
-      const front = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 18.2, 12), ropeMat);
-      front.rotation.z = Math.PI / 2; front.position.set(0, y, 4.15);
-      const back = front.clone(); back.position.z = -4.15;
-      const left = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 8.3, 12), ropeMat);
-      left.rotation.x = Math.PI / 2; left.position.set(-9.15, y, 0);
-      const right = left.clone(); right.position.x = 9.15;
-      this.scene.add(front, back, left, right);
+  addRockFormations() {
+    const rockMat = this.makeRockMaterial(0x655b50);
+    const positions = [[-11,0.6,-4.8],[-8.5,0.35,-5.5],[10.5,0.6,-4.8],[8.4,0.4,-5.6],[-12,0.65,4.8],[12,0.65,4.7],[-5.5,0.25,5.4],[5.4,0.25,5.4]];
+    positions.forEach(([x, y, z], i) => {
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6 + (i % 3) * 0.28, 0), rockMat);
+      rock.scale.set(1.4 + Math.random(), 0.55 + Math.random() * 0.55, 0.8 + Math.random());
+      rock.position.set(x, y, z);
+      rock.rotation.set(Math.random(), Math.random() * Math.PI, Math.random());
+      rock.castShadow = true;
+      rock.receiveShadow = true;
+      this.scene.add(rock);
     });
   }
 
-  addBackdrop() {
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0x172033, roughness: 0.9 });
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(28, 10, 0.35), wallMat);
-    wall.position.set(0, 4.5, -9.2);
-    wall.receiveShadow = true;
-    this.scene.add(wall);
-
-    const bannerMat = new THREE.MeshStandardMaterial({ color: 0xffc857, roughness: 0.45, emissive: 0x443000 });
-    const banner = new THREE.Mesh(new THREE.BoxGeometry(9.5, 1.3, 0.08), bannerMat);
-    banner.position.set(0, 5.8, -8.95);
-    this.scene.add(banner);
-
-    const crowdMat = new THREE.MeshStandardMaterial({ color: 0x0b1020, roughness: 0.8 });
-    for (let i = 0; i < 22; i++) {
-      const block = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.8 + Math.random() * 0.7, 0.45), crowdMat);
-      block.position.set(-12 + i * 1.12, 0.35, -7.7 - Math.random() * 0.8);
-      this.scene.add(block);
-    }
-  }
-
-  addProps() {
-    const crateMat = new THREE.MeshStandardMaterial({ color: 0x8d5524, roughness: 0.75 });
-    for (const x of [-7.5, 7.5]) {
-      const crate = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.55, 0.7), crateMat);
-      crate.position.set(x, 0.32, 5.9);
-      crate.castShadow = true;
-      this.scene.add(crate);
-    }
+  addAtmosphereProps() {
+    const torchMat = new THREE.MeshStandardMaterial({ color: 0x2a1a12, roughness: 0.6 });
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffaa33 });
+    [-7.5, 7.5].forEach((x) => {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 2.4, 12), torchMat);
+      pole.position.set(x, 1.2, -5.8);
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.55, 16), flameMat);
+      flame.position.set(x, 2.65, -5.8);
+      this.scene.add(pole, flame);
+    });
   }
 
   async loadFighters() {
-    // User is P1 on the RIGHT. AI is P2 on the LEFT.
-    this.p1 = new Fighter({ id: 'P1-RIGHT', color: 0x2f7dff, startX: 2.6, modelUrl: '/assets/characters/player1/character.fbx', animationBaseUrl: '/assets/characters/player1', bindings: P1_BINDINGS, assetLoader: this.loader, vfx: this.vfx });
-    this.p2 = new Fighter({ id: 'AI-LEFT', color: 0xff374f, startX: -2.6, modelUrl: '/assets/characters/player2/character.fbx', animationBaseUrl: '/assets/characters/player2', bindings: P2_BINDINGS, assetLoader: this.loader, isAI: true, vfx: this.vfx });
+    this.p1 = new Fighter({ id: 'P1-LEFT', color: 0x2f7dff, startX: -2.6, modelUrl: '/assets/characters/player1/character.fbx', animationBaseUrl: '/assets/characters/player1', bindings: P1_BINDINGS, assetLoader: this.loader, vfx: this.vfx });
+    this.p2 = new Fighter({ id: 'AI-RIGHT', color: 0xff374f, startX: 2.6, modelUrl: '/assets/characters/player2/character.fbx', animationBaseUrl: '/assets/characters/player2', bindings: P2_BINDINGS, assetLoader: this.loader, isAI: true, vfx: this.vfx });
     await Promise.all([this.p1.load(), this.p2.load()]);
     this.scene.add(this.p1.group, this.p2.group);
     this.p1.faceOpponent(this.p2);
@@ -213,7 +195,7 @@ export class FightingGame {
     }
     this.p1.faceOpponent(this.p2);
     this.p2.faceOpponent(this.p1);
-    // Absolutely no body collision, no resolveBodyPush, no separation.
+    // No collision resolution. Characters can pass through each other.
     if (!this.roundOver) {
       this.aiInput.update(dt, this.p2, this.p1);
       this.p1.update(dt, this.input, this.p2, this.arena);
@@ -226,46 +208,8 @@ export class FightingGame {
     this.updateHud();
   }
 
-  updateHud() {
-    document.getElementById('p1Health').style.width = `${this.p1.health}%`;
-    document.getElementById('p2Health').style.width = `${this.p2.health}%`;
-  }
-
-  checkRoundOver() {
-    if (!(this.p1.health <= 0 || this.p2.health <= 0)) return;
-    const text = document.getElementById('roundText');
-    this.roundOver = true;
-    text.textContent = this.p1.health <= 0 && this.p2.health <= 0 ? 'DRAW' : (this.p1.health <= 0 ? 'AI WINS' : 'P1 WINS');
-    const replay = document.getElementById('replayBtn');
-    if (replay) replay.style.display = 'block';
-  }
-
-  resetRound() {
-    if (!this.p1 || !this.p2) return;
-    this.roundOver = false;
-    this.p1.health = 100;
-    this.p2.health = 100;
-    this.p1.koStarted = this.p2.koStarted = false;
-    this.p1.stun = this.p2.stun = 0;
-    this.p1.hitStop = this.p2.hitStop = 0;
-    this.p1.group.position.set(2.6, 0, 0);
-    this.p2.group.position.set(-2.6, 0, 0);
-    this.p1.velocity.set(0, 0, 0);
-    this.p2.velocity.set(0, 0, 0);
-    this.p1.setState('idle');
-    this.p2.setState('idle');
-    this.p1.play('idle', 0.05, true, true);
-    this.p2.play('idle', 0.05, true, true);
-    this.p1.faceOpponent(this.p2);
-    this.p2.faceOpponent(this.p1);
-    document.getElementById('roundText').textContent = 'ROUND 1';
-    document.getElementById('replayBtn').style.display = 'none';
-    this.updateHud();
-  }
-
-  onResize() {
-    this.camera.aspect = window.innerWidth / window.innerHeight;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
-  }
+  updateHud() { document.getElementById('p1Health').style.width = `${this.p1.health}%`; document.getElementById('p2Health').style.width = `${this.p2.health}%`; }
+  checkRoundOver() { if (!(this.p1.health <= 0 || this.p2.health <= 0)) return; const text = document.getElementById('roundText'); this.roundOver = true; text.textContent = this.p1.health <= 0 && this.p2.health <= 0 ? 'DRAW' : (this.p1.health <= 0 ? 'AI WINS' : 'P1 WINS'); const replay = document.getElementById('replayBtn'); if (replay) replay.style.display = 'block'; }
+  resetRound() { if (!this.p1 || !this.p2) return; this.roundOver = false; this.p1.health = 100; this.p2.health = 100; this.p1.koStarted = this.p2.koStarted = false; this.p1.stun = this.p2.stun = 0; this.p1.hitStop = this.p2.hitStop = 0; this.p1.group.position.set(-2.6, 0, 0); this.p2.group.position.set(2.6, 0, 0); this.p1.velocity.set(0, 0, 0); this.p2.velocity.set(0, 0, 0); this.p1.setState('idle'); this.p2.setState('idle'); this.p1.play('idle', 0.05, true, true); this.p2.play('idle', 0.05, true, true); this.p1.faceOpponent(this.p2); this.p2.faceOpponent(this.p1); document.getElementById('roundText').textContent = 'ROUND 1'; document.getElementById('replayBtn').style.display = 'none'; this.updateHud(); }
+  onResize() { this.camera.aspect = window.innerWidth / window.innerHeight; this.camera.updateProjectionMatrix(); this.renderer.setSize(window.innerWidth, window.innerHeight); }
 }
