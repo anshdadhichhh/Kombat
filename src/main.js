@@ -1,5 +1,8 @@
 import './style.css';
 import { FightingGame } from './game.js';
+import { setupArenaConfigTools } from './configTools.js';
+
+setupArenaConfigTools();
 
 const game = new FightingGame(document.body);
 game.init().catch((err) => {
