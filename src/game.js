@@ -23,27 +23,33 @@ export class FightingGame {
     this.loadingEl = null;
     this.fallbackArena = null;
     this.loadedArena = null;
+    this.arenaBaseScale = new THREE.Vector3(1, 1, 1);
+    this.arenaBasePosition = new THREE.Vector3(0, 0, 0);
 
     this.fixedCamera = true;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x070912);
-    this.scene.fog = new THREE.Fog(0x070912, 14, 34);
+    this.scene.background = new THREE.Color(0x8fb6e8); // not black anymore
+    this.scene.fog = new THREE.Fog(0x8fb6e8, 18, 42);
 
     this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
     this.camera.position.set(0, 3.2, 11.0);
     this.camera.lookAt(0, 1.15, 0);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    this.renderer.setClearColor(0x8fb6e8, 1);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-    this.renderer.shadowMap.enabled = false; // faster on laptops/browsers
+    this.renderer.shadowMap.enabled = false;
     this.container.appendChild(this.renderer.domElement);
 
     window.addEventListener('resize', () => this.onResize());
+    this.setupArenaSliders();
+    this.setupReplayButton();
   }
 
   async init() {
+    this.addEnvironment();
     this.addLights();
     this.makeFallbackArena();
     this.showLoading('Loading fighters...');
@@ -53,27 +59,45 @@ export class FightingGame {
       await Promise.all([this.loadArena(), this.loadFighters()]);
       this.assetsReady = true;
       this.hideLoading();
-      console.log('Game ready. P1 controls: A/D/W/S/J/K/L. P2 is AI.');
+      console.log('Game ready. P1 keys: W A S D Q E C Z X. P2 is AI.');
     } catch (err) {
       console.error('Game asset load failed:', err);
       this.showLoading(`Asset load failed. Check console. ${err.message || err}`);
     }
   }
 
-  addLights() {
-    this.scene.add(new THREE.HemisphereLight(0xaec8ff, 0x302010, 1.8));
+  addEnvironment() {
+    // Bright background floor/horizon so the scene is not black outside the arena model.
+    const back = new THREE.Mesh(
+      new THREE.PlaneGeometry(80, 40),
+      new THREE.MeshBasicMaterial({ color: 0x8fb6e8, depthWrite: false })
+    );
+    back.position.set(0, 12, -18);
+    this.scene.add(back);
 
-    const key = new THREE.DirectionalLight(0xffffff, 2.4);
+    const base = new THREE.Mesh(
+      new THREE.PlaneGeometry(80, 80),
+      new THREE.MeshStandardMaterial({ color: 0x6f7f90, roughness: 0.9, metalness: 0.0 })
+    );
+    base.rotation.x = -Math.PI / 2;
+    base.position.y = -0.16;
+    this.scene.add(base);
+  }
+
+  addLights() {
+    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x78624a, 2.3));
+
+    const key = new THREE.DirectionalLight(0xffffff, 3.0);
     key.position.set(-4, 8, 6);
     this.scene.add(key);
 
-    const fill = new THREE.DirectionalLight(0x88aaff, 1.1);
+    const fill = new THREE.DirectionalLight(0xdde8ff, 1.6);
     fill.position.set(5, 4, 5);
     this.scene.add(fill);
 
-    const rim = new THREE.PointLight(0x3366ff, 1.8, 20);
-    rim.position.set(4, 3, -4);
-    this.scene.add(rim);
+    const front = new THREE.PointLight(0xffffff, 1.4, 22);
+    front.position.set(0, 3, 6);
+    this.scene.add(front);
   }
 
   async loadArena() {
@@ -90,6 +114,8 @@ export class FightingGame {
         this.fitArenaToStage(arenaObject);
         this.scene.add(arenaObject);
         this.loadedArena = arenaObject;
+        this.captureArenaBaseTransform(arenaObject);
+        this.applyArenaSliders();
         if (this.fallbackArena) this.fallbackArena.visible = false;
         console.log(`Loaded arena: ${url}`);
         return;
@@ -99,6 +125,9 @@ export class FightingGame {
     }
 
     console.warn('No arena.glb / arena.gltf / arena.fbx found. Keeping fallback arena.');
+    this.loadedArena = this.fallbackArena;
+    this.captureArenaBaseTransform(this.fallbackArena);
+    this.applyArenaSliders();
   }
 
   fitArenaToStage(object) {
@@ -107,6 +136,12 @@ export class FightingGame {
         child.castShadow = false;
         child.receiveShadow = true;
         child.frustumCulled = false;
+        if (child.material) {
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach((m) => {
+            if ('color' in m && m.color?.getHex?.() === 0x000000) m.color.set(0x777777);
+          });
+        }
       }
     });
 
@@ -117,12 +152,10 @@ export class FightingGame {
     box.getSize(size);
     box.getCenter(center);
 
-    // Center arena X/Z so you do not see only half of the GLB.
     object.position.x -= center.x;
     object.position.z -= center.z;
     object.position.y -= box.min.y;
 
-    // Fit full arena into camera view. Adjust these if you want a bigger stage.
     const targetWidth = 16;
     const targetDepth = 7;
     const scaleX = size.x > 0.001 ? targetWidth / size.x : 1;
@@ -141,16 +174,66 @@ export class FightingGame {
 
     const floor = new THREE.Mesh(
       new THREE.BoxGeometry(18, 0.2, 7),
-      new THREE.MeshStandardMaterial({ color: 0x30333d, metalness: 0.1, roughness: 0.45 })
+      new THREE.MeshStandardMaterial({ color: 0x596675, metalness: 0.1, roughness: 0.45 })
     );
     floor.position.y = -0.1;
     this.fallbackArena.add(floor);
 
-    const grid = new THREE.GridHelper(18, 18, 0xffaa33, 0x555a66);
+    const grid = new THREE.GridHelper(18, 18, 0xffdd77, 0x8794a5);
     grid.position.y = 0.01;
     this.fallbackArena.add(grid);
 
     this.scene.add(this.fallbackArena);
+    this.loadedArena = this.fallbackArena;
+    this.captureArenaBaseTransform(this.fallbackArena);
+  }
+
+  setupArenaSliders() {
+    ['arenaScale', 'arenaX', 'arenaY', 'arenaZ'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', () => this.applyArenaSliders());
+    });
+  }
+
+  setupReplayButton() {
+    const btn = document.getElementById('replayBtn');
+    if (btn) btn.addEventListener('click', () => this.resetRound());
+  }
+
+  captureArenaBaseTransform(object) {
+    if (!object) return;
+    this.arenaBaseScale.copy(object.scale);
+    this.arenaBasePosition.copy(object.position);
+  }
+
+  sliderNumber(id, fallback) {
+    const el = document.getElementById(id);
+    if (!el) return fallback;
+    return Number.parseFloat(el.value) || fallback;
+  }
+
+  applyArenaSliders() {
+    const object = this.loadedArena || this.fallbackArena;
+    if (!object) return;
+
+    const scale = this.sliderNumber('arenaScale', 1);
+    const x = this.sliderNumber('arenaX', 0);
+    const y = this.sliderNumber('arenaY', 0);
+    const z = this.sliderNumber('arenaZ', 0);
+
+    object.scale.copy(this.arenaBaseScale).multiplyScalar(scale);
+    object.position.copy(this.arenaBasePosition).add(new THREE.Vector3(x, y, z));
+
+    this.setSliderLabel('arenaScaleValue', scale.toFixed(2));
+    this.setSliderLabel('arenaXValue', x.toFixed(1));
+    this.setSliderLabel('arenaYValue', y.toFixed(1));
+    this.setSliderLabel('arenaZValue', z.toFixed(1));
+  }
+
+  setSliderLabel(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
   }
 
   async loadFighters() {
@@ -196,7 +279,6 @@ export class FightingGame {
       this.p2.update(dt, this.aiInput, this.p1, this.arena);
       this.checkRoundOver();
     } else {
-      // Continue updating mixers after KO so Dying.fbx can finish instead of freezing.
       this.p1.update(dt, NEUTRAL_INPUT, this.p2, this.arena);
       this.p2.update(dt, NEUTRAL_INPUT, this.p1, this.arena);
     }
@@ -233,11 +315,41 @@ export class FightingGame {
   }
 
   checkRoundOver() {
+    if (!(this.p1.health <= 0 || this.p2.health <= 0)) return;
+
     const text = document.getElementById('roundText');
-    if (this.p1.health <= 0 || this.p2.health <= 0) {
-      this.roundOver = true;
-      text.textContent = this.p1.health <= 0 && this.p2.health <= 0 ? 'DRAW' : (this.p1.health <= 0 ? 'AI WINS' : 'P1 WINS');
-    }
+    this.roundOver = true;
+    text.textContent = this.p1.health <= 0 && this.p2.health <= 0 ? 'DRAW' : (this.p1.health <= 0 ? 'AI WINS' : 'P1 WINS');
+
+    const replay = document.getElementById('replayBtn');
+    if (replay) replay.style.display = 'block';
+  }
+
+  resetRound() {
+    if (!this.p1 || !this.p2) return;
+
+    this.roundOver = false;
+    this.p1.health = 100;
+    this.p2.health = 100;
+    this.p1.koStarted = false;
+    this.p2.koStarted = false;
+    this.p1.stun = 0;
+    this.p2.stun = 0;
+    this.p1.hitStop = 0;
+    this.p2.hitStop = 0;
+    this.p1.group.position.set(-2.4, 0, 0);
+    this.p2.group.position.set(2.4, 0, 0);
+    this.p1.velocity.set(0, 0, 0);
+    this.p2.velocity.set(0, 0, 0);
+    this.p1.setState('idle');
+    this.p2.setState('idle');
+    this.p1.play('idle', 0.05, true, true);
+    this.p2.play('idle', 0.05, true, true);
+    this.p1.faceOpponent(this.p2);
+    this.p2.faceOpponent(this.p1);
+    document.getElementById('roundText').textContent = 'ROUND 1';
+    document.getElementById('replayBtn').style.display = 'none';
+    this.updateHud();
   }
 
   showLoading(message) {
