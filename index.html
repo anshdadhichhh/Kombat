@@ -6,11 +6,12 @@
     <title>Tekken Style JS Fighter</title>
     <style>
       html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #8fb6e8; }
-      #boot { position: fixed; inset: 0; background: #8fb6e8; color: #102033; display: grid; place-items: center; font: 16px system-ui, Arial; z-index: 9999; }
+      #boot { position: fixed; inset: 0; background: #101827; color: #fff; display: grid; place-items: center; font: 16px system-ui, Arial; z-index: 9999; }
+      #playBtn { display:none; margin-top:16px; padding:12px 32px; border-radius:999px; border:2px solid white; background:#ffcc33; font-weight:900; font-size:20px; cursor:pointer; }
     </style>
   </head>
   <body>
-    <div id="boot">Loading game...</div>
+    <div id="boot"><div style="text-align:center"><div id="bootMessage">Loading all assets...</div><button id="playBtn">PLAY</button></div></div>
 
     <div id="hud">
       <div class="barWrap"><span>P1</span><div class="bar"><div id="p1Health" class="fill"></div></div></div>
@@ -29,15 +30,15 @@
         </select>
         <span></span>
       </label>
-      <label>Size <input id="arenaScale" type="range" min="0.05" max="20" step="0.05" value="1"><span id="arenaScaleValue">1.00</span></label>
-      <label>Offset X <input id="arenaX" type="range" min="-100" max="100" step="0.5" value="0"><span id="arenaXValue">0.0</span></label>
-      <label>Offset Y <input id="arenaY" type="range" min="-100" max="100" step="0.5" value="0"><span id="arenaYValue">0.0</span></label>
-      <label>Offset Z <input id="arenaZ" type="range" min="-100" max="100" step="0.5" value="0"><span id="arenaZValue">0.0</span></label>
+      <label>Size <input id="arenaScale" type="range" min="0.01" max="100" step="0.05" value="1"><span id="arenaScaleValue">1.00</span></label>
+      <label>Offset X <input id="arenaX" type="range" min="-1000" max="1000" step="1" value="0"><span id="arenaXValue">0.0</span></label>
+      <label>Offset Y <input id="arenaY" type="range" min="-1000" max="1000" step="1" value="0"><span id="arenaYValue">0.0</span></label>
+      <label>Offset Z <input id="arenaZ" type="range" min="-1000" max="1000" step="1" value="0"><span id="arenaZValue">0.0</span></label>
     </div>
 
     <div id="help">
       <b>P1:</b> A/D move, W jump, S block/crouch, Q or Z punch, E or C kick, X heavy<br/>
-      <b>AI:</b> automatic opponent · <b>VFX:</b> comic impact/starburst, shock ring, speed lines
+      <b>AI:</b> automatic opponent · fighters can cross/pass each other
     </div>
 
     <script type="module" src="/src/main.js"></script>
