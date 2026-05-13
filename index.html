@@ -22,6 +22,13 @@
 
     <div id="arenaControls">
       <b>Arena</b>
+      <label>Model
+        <select id="arenaSelect">
+          <option value="arena1.glb">arena1.glb</option>
+          <option value="arena2.glb">arena2.glb</option>
+        </select>
+        <span></span>
+      </label>
       <label>Size <input id="arenaScale" type="range" min="0.25" max="3" step="0.05" value="1"><span id="arenaScaleValue">1.00</span></label>
       <label>Offset X <input id="arenaX" type="range" min="-10" max="10" step="0.1" value="0"><span id="arenaXValue">0.0</span></label>
       <label>Offset Y <input id="arenaY" type="range" min="-5" max="5" step="0.1" value="0"><span id="arenaYValue">0.0</span></label>
@@ -30,7 +37,7 @@
 
     <div id="help">
       <b>P1:</b> A/D move, W jump, S block/crouch, Q or Z punch, E or C kick, X heavy<br/>
-      <b>AI:</b> automatic opponent
+      <b>AI:</b> automatic opponent · <b>VFX:</b> hit sparks, jump dust, arena flash
     </div>
 
     <script type="module" src="/src/main.js"></script>
