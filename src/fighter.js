@@ -40,6 +40,7 @@ export class Fighter {
     this.mixer = null;
     this.actions = new Map();
     this.currentAction = null;
+    this.animationsReady = false;
   }
 
   async load() {
@@ -47,45 +48,59 @@ export class Fighter {
     try {
       visual = await this.assetLoader.loadFBX(this.modelUrl);
       normalizeFbxObject(visual, this.height);
+      console.log(`[${this.id}] Loaded character mesh: ${this.modelUrl}`);
     } catch (err) {
       console.warn(`[${this.id}] Could not load ${this.modelUrl}. Using fallback fighter.`, err);
       visual = makeFallbackFighter(this.color);
     }
+
     this.visual = visual;
     this.group.add(visual);
-
     this.mixer = new THREE.AnimationMixer(visual);
 
-    // Do not block the whole game while large FBX animation files load.
-    // The character mesh appears first, then animations attach when ready.
-    this.loadAnimations()
-      .then(() => this.play('idle', 0.1))
-      .catch((err) => console.warn(`[${this.id}] Animation loading failed`, err));
+    // Load Idle.fbx first so the character immediately leaves T-pose.
+    await this.loadAnimationEntry('idle');
+    this.play('idle', 0.05, true, true);
+
+    // Load all remaining animations in the background so movement starts immediately.
+    this.loadRemainingAnimations().catch((err) => console.warn(`[${this.id}] Background animation loading failed`, err));
   }
 
-  async loadAnimations() {
+  async loadRemainingAnimations() {
+    const names = Object.keys(DEFAULT_ANIMATION_MAP).filter((name) => name !== 'idle');
+    await Promise.all(names.map((name) => this.loadAnimationEntry(name)));
+    this.animationsReady = true;
+    console.log(`[${this.id}] All available animations loaded.`);
+  }
+
+  async loadAnimationEntry(name) {
+    if (this.actions.has(name)) return;
+
     const base = this.animationBaseUrl;
-    const entries = Object.entries(DEFAULT_ANIMATION_MAP);
+    const files = DEFAULT_ANIMATION_MAP[name];
+    const fileList = Array.isArray(files) ? files : [files];
+    const loadedActions = [];
 
-    await Promise.all(entries.map(async ([name, files]) => {
-      const fileList = Array.isArray(files) ? files : [files];
-      const loadedActions = [];
-
-      await Promise.all(fileList.map(async (file, index) => {
-        try {
-          const actionName = fileList.length === 1 ? name : `${name}_${index}`;
-          const clip = await this.assetLoader.loadAnimationClip(`${base}/${file}`, actionName);
-          const action = this.mixer.clipAction(clip);
-          action.clampWhenFinished = true;
-          loadedActions.push(action);
-        } catch (err) {
-          console.warn(`[${this.id}] Missing animation: ${base}/${file}`);
-        }
-      }));
-
-      if (loadedActions.length === 1) this.actions.set(name, loadedActions[0]);
-      if (loadedActions.length > 1) this.actions.set(name, loadedActions);
+    await Promise.all(fileList.map(async (file, index) => {
+      const url = `${base}/${encodeURIComponent(file)}`;
+      try {
+        const actionName = fileList.length === 1 ? name : `${name}_${index}`;
+        const clip = await this.assetLoader.loadAnimationClip(url, actionName);
+        const action = this.mixer.clipAction(clip);
+        action.clampWhenFinished = true;
+        loadedActions.push(action);
+        console.log(`[${this.id}] Loaded animation ${name}: ${file}`);
+      } catch (err) {
+        console.warn(`[${this.id}] Missing/bad animation ${name}: ${url}`, err.message || err);
+      }
     }));
+
+    if (loadedActions.length === 1) this.actions.set(name, loadedActions[0]);
+    if (loadedActions.length > 1) this.actions.set(name, loadedActions);
+
+    if (name === 'idle' && !this.actions.has('idle')) {
+      console.error(`[${this.id}] Idle animation not loaded. Check exact filename and capitalization: ${base}/Idle.fbx`);
+    }
   }
 
   pickAction(name) {
@@ -96,8 +111,8 @@ export class Fighter {
 
   play(name, fade = 0.08, loop = true, forceRestart = false) {
     const next = this.pickAction(name);
-    if (!next) return;
-    if (!forceRestart && next === this.currentAction && next.isRunning()) return;
+    if (!next) return false;
+    if (!forceRestart && next === this.currentAction && next.isRunning()) return true;
 
     next.reset();
     next.enabled = true;
@@ -108,6 +123,7 @@ export class Fighter {
 
     if (this.currentAction && this.currentAction !== next) this.currentAction.fadeOut(fade);
     this.currentAction = next;
+    return true;
   }
 
   update(dt, input, opponent, arena) {
@@ -157,7 +173,7 @@ export class Fighter {
       this.velocity.y = this.jumpVelocity;
       this.isGrounded = false;
       this.setState(STATE.JUMP);
-      this.play('jump', 0.05, false);
+      this.play('jump', 0.05, false, true);
     } else {
       let move = 0;
       if (left) move -= 1;
@@ -171,7 +187,7 @@ export class Fighter {
       } else if (Math.abs(move) > 0.01) {
         this.setState(STATE.WALK);
         const movingTowardFacing = Math.sign(move) === this.facing;
-        this.play(movingTowardFacing ? 'walkForward' : 'walkBack', 0.1);
+        this.play(movingTowardFacing ? 'walkForward' : 'walkBack', 0.08);
       } else {
         this.setState(STATE.IDLE);
         this.play('idle', 0.12);
