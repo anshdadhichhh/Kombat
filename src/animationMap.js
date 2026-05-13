@@ -2,7 +2,6 @@
 // Put the same filenames in BOTH folders:
 // public/assets/characters/player1/
 // public/assets/characters/player2/
-//
 // Values can be a string or an array. Arrays are picked randomly when played.
 export const DEFAULT_ANIMATION_MAP = {
   idle: 'Idle.fbx',
@@ -11,23 +10,31 @@ export const DEFAULT_ANIMATION_MAP = {
   jump: 'Jumping.fbx',
   crouch: 'Block.fbx',
   block: 'Block.fbx',
-
-  // Punch randomly uses one of these two animations.
   punch: ['Cross Punch.fbx', 'Cross Punch mirror.fbx'],
-
-  // Kick / heavy mapped to your stronger attack animations.
   kick: 'Flying Kick.fbx',
   heavy: 'Jump Attack.fbx',
-
-  // Hit reaction randomly uses one of these three animations.
   hit: ['Head Hit.fbx', 'Hit To Body.fbx', 'Receive Punch To The Face.fbx'],
-
   ko: 'Dying.fbx',
   victory: 'Idle.fbx'
 };
 
+export const ANIMATION_SPEEDS = {
+  punch: 1.65,
+  kick: 1.18,
+  heavy: 1.08,
+  hit: 1.15,
+  ko: 1.0,
+  jump: 1.0,
+  idle: 1.0,
+  walkForward: 1.0,
+  walkBack: 1.0,
+  block: 1.0,
+  crouch: 1.0
+};
+
 export const ATTACKS = {
-  punch: { damage: 7, startup: 0.09, active: 0.16, recovery: 0.20, range: 1.15, height: 'mid', push: 0.18 },
-  kick:  { damage: 12, startup: 0.16, active: 0.20, recovery: 0.32, range: 1.65, height: 'mid', push: 0.30 },
-  heavy: { damage: 16, startup: 0.22, active: 0.24, recovery: 0.44, range: 1.45, height: 'mid', push: 0.40 }
+  // Faster punch startup/recovery to match faster punch animation playback.
+  punch: { damage: 7, startup: 0.055, active: 0.13, recovery: 0.12, range: 1.15, height: 'mid', push: 0.18 },
+  kick:  { damage: 12, startup: 0.14, active: 0.20, recovery: 0.28, range: 1.65, height: 'mid', push: 0.30 },
+  heavy: { damage: 16, startup: 0.20, active: 0.24, recovery: 0.40, range: 1.45, height: 'mid', push: 0.40 }
 };
