@@ -35,10 +35,6 @@ export class Fighter {
     this.blocking = false;
     this.koStarted = false;
 
-    // Committed position: once an attack lunge fires we store the destination
-    // and enforce it each frame so integrate() can't undo it.
-    this._lungeTargetX = null;
-
     this.maxSpeed = 3.2;
     this.acceleration = 22;
     this.friction = 18;
@@ -55,6 +51,9 @@ export class Fighter {
     this.visualBaseScale = new THREE.Vector3(1, 1, 1);
     this.visualBasePosition = new THREE.Vector3(0, 0, 0);
     this.visualOffset = { scale: 1, x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 };
+    this.attackStartX = startX;
+    this.attackMotionApplied = 0;
+    this.attackRootMotion = null;
   }
 
   async load() {
@@ -170,7 +169,6 @@ export class Fighter {
         this.play('ko', 0.05, false, true);
       }
       this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
-      this._lungeTargetX = null;
       this.integrate(dt, arena, opponent);
       this.mixer?.update(dt);
       return;
@@ -183,7 +181,6 @@ export class Fighter {
     if (this.stun > 0) {
       this.stun -= dt;
       this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
-      this._lungeTargetX = null;
       this.integrate(dt, arena, opponent);
       this.mixer?.update(dt);
       return;
@@ -268,35 +265,27 @@ export class Fighter {
     if (this.health <= 0) return;
     this.attackKind = kind;
     this.attackHasHit = false;
-    this.attackLunged = false;
-    this._lungeTargetX = null;
+    this.attackStartX = this.group.position.x;
+    this.attackMotionApplied = 0;
+    this.attackRootMotion = null;
+
     this.velocity.x = 0; // Kill horizontal velocity immediately for crisp attack start
     this.setState(STATE.ATTACK);
-    this.play(kind, 0.025, false, true);
+    if (this.play(kind, 0.025, false, true)) {
+      this.attackRootMotion = this.currentAction?.getClip()?.userData?.rootMotion || null;
+    }
   }
 
   updateAttack(opponent, arena) {
     const atk = ATTACKS[this.attackKind];
     const t = this.stateTime;
     if (!atk) return;
+    this.applyAttackMotion(atk, t, arena);
 
     // FIX: Forward lunge — commit the destination position instead of doing a
     // one-shot teleport that integrate() can later undo.
-    if (!this.attackLunged && t >= atk.startup) {
-      this.attackLunged = true;
-      const desired = this.group.position.x + atk.push * this.facing;
-      // Clamp lunge to arena bounds
-      this._lungeTargetX = THREE.MathUtils.clamp(desired, -arena.halfWidth, arena.halfWidth);
-    }
+   
 
-    // Smoothly slide to lunge target during the active window
-    if (this._lungeTargetX !== null) {
-      this.group.position.x = THREE.MathUtils.lerp(
-        this.group.position.x,
-        this._lungeTargetX,
-        Math.min(1, 12 * (1 / 60)) // fast but not instant; feels physical
-      );
-    }
 
     if (!this.attackHasHit && t >= atk.startup && t <= atk.startup + atk.active) {
       const dx = opponent.group.position.x - this.group.position.x;
@@ -312,16 +301,37 @@ export class Fighter {
     }
 
     if (t >= atk.startup + atk.active + atk.recovery) {
+      this.applyAttackMotion(atk, Infinity, arena);
+      this.attackKind = null;
       // FIX: Keep the committed lunge position — don't snap back.
       // The lunge target IS where the character now stands.
-      if (this._lungeTargetX !== null) {
-        this.group.position.x = this._lungeTargetX;
-      }
-      this._lungeTargetX = null;
-      this.attackKind = null;
+ 
       this.setState(STATE.IDLE);
       this.play('idle', 0.1);
     }
+  }
+
+  applyAttackMotion(atk, t, arena) {
+    const total = Math.max(0.001, atk.startup + atk.active + atk.recovery);
+    const progress = t === Infinity ? 1 : THREE.MathUtils.clamp(t / total, 0, 1);
+    const lungeDistance = Math.max(0, atk.lunge ?? 0);
+    let targetMotion = 0;
+
+    if (this.attackRootMotion?.distance > 0 && this.attackRootMotion?.sample) {
+      const clipDuration = this.currentAction?.getClip()?.duration || total;
+      const clipTime = clipDuration * progress;
+      targetMotion = (this.attackRootMotion.sample(clipTime) / this.attackRootMotion.distance) * lungeDistance;
+    } else {
+      targetMotion = THREE.MathUtils.smootherstep(progress, 0, 1) * lungeDistance;
+    }
+
+    targetMotion = THREE.MathUtils.clamp(targetMotion, 0, lungeDistance);
+    const delta = targetMotion - this.attackMotionApplied;
+    if (Math.abs(delta) < 0.0001) return;
+
+    this.group.position.x += delta * this.facing;
+    this.group.position.x = THREE.MathUtils.clamp(this.group.position.x, -arena.halfWidth, arena.halfWidth);
+    this.attackMotionApplied = Math.abs(this.group.position.x - this.attackStartX);
   }
 
   receiveHit(atk, attacker) {
