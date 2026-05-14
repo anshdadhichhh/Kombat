@@ -55,6 +55,7 @@ export class FightingGame {
     this.setupSliders();
     this.setupTransformButtons();
     this.setupBackgroundControls();
+    this.setupArenaUpload();
   }
 
   async init() {
@@ -163,6 +164,37 @@ export class FightingGame {
     });
   }
 
+  setupArenaUpload() {
+    const input = document.getElementById('arenaUpload');
+    if (!input) return;
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      try {
+        await this.loadArenaFromUrl(url, `uploaded:${file.name}`);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    });
+  }
+
+  async loadArenaFromUrl(url, name = 'uploaded') {
+    const obj = await this.loader.loadObject(url);
+    obj.name = `ArenaModel:${name}`;
+    this.prepareArenaModel(obj);
+    if (this.arenaRoot) this.scene.remove(this.arenaRoot);
+    const root = new THREE.Group();
+    root.name = `ArenaRoot:${name}`;
+    root.add(obj);
+    this.scene.add(root);
+    this.arenaRoot = root;
+    this.loadedArena = obj;
+    this.transformControls.attach(root);
+    this.applyArenaDefaultForFile(name.includes('arena.glb') ? 'arena.glb' : name);
+    console.log(`Loaded arena from upload: ${name}`);
+  }
+
   async loadArenaFromFolder() {
     const files = ['arena.glb', 'arena1.glb', 'arena2.glb', 'arena.gltf', 'arena.fbx'];
     for (const file of files) {
@@ -177,7 +209,7 @@ export class FightingGame {
         this.arenaRoot = root;
         this.loadedArena = obj;
         this.transformControls.attach(root);
-        this.applyArenaSliders();
+        this.applyArenaDefaultForFile(file);
         console.log(`Loaded arena from public/assets/arena/${file}`);
         return;
       } catch (err) {
@@ -235,10 +267,23 @@ export class FightingGame {
     return floor;
   }
 
+  applyArenaDefaultForFile(file) {
+    if (file === 'arena.glb') {
+      this.setInput('arenaScale', 32.503);
+      this.setInput('arenaX', -0.12);
+      this.setInput('arenaY', -5.82);
+      this.setInput('arenaZ', -2.61);
+      this.setInput('arenaRotX', 0);
+      this.setInput('arenaRotY', 133.2);
+      this.setInput('arenaRotZ', 0);
+    }
+    this.applyArenaSliders();
+  }
+
   setupSliders() {
-    ['arenaScale','arenaX','arenaY','arenaZ','arenaRotX','arenaRotY','arenaRotZ'].forEach((id) => {
+    ['arenaScale','arenaX','arenaY','arenaZ','arenaRotX','arenaRotY','arenaRotZ','p1StartX','p1StartY','p1StartZ','p2StartX','p2StartY','p2StartZ'].forEach((id) => {
       const el = document.getElementById(id);
-      if (el) el.addEventListener('input', () => this.applyArenaSliders());
+      if (el) el.addEventListener('input', () => { this.applyArenaSliders(); this.applyPlayerStartSliders(); });
     });
   }
 
@@ -284,11 +329,26 @@ export class FightingGame {
   setInput(id, value) { const el = document.getElementById(id); if (el) el.value = String(value); }
   label(id, value) { const el = document.getElementById(id); if (el) el.textContent = value; }
 
+  applyPlayerStartSliders() {
+    if (!this.p1 || !this.p2 || this.fightStarted) return;
+    this.p1.group.position.set(this.num('p1StartX', -2.6), this.num('p1StartY', 0), this.num('p1StartZ', 0));
+    this.p2.group.position.set(this.num('p2StartX', 2.6), this.num('p2StartY', 0), this.num('p2StartZ', 0));
+    this.label('p1StartXValue', this.p1.group.position.x.toFixed(2));
+    this.label('p1StartYValue', this.p1.group.position.y.toFixed(2));
+    this.label('p1StartZValue', this.p1.group.position.z.toFixed(2));
+    this.label('p2StartXValue', this.p2.group.position.x.toFixed(2));
+    this.label('p2StartYValue', this.p2.group.position.y.toFixed(2));
+    this.label('p2StartZValue', this.p2.group.position.z.toFixed(2));
+    this.p1.faceOpponent(this.p2);
+    this.p2.faceOpponent(this.p1);
+  }
+
   async loadFighters() {
     this.p1 = new Fighter({ id: 'P1-LEFT', color: 0x2f7dff, startX: -2.6, modelUrl: '/assets/characters/player1/character.fbx', animationBaseUrl: '/assets/characters/player1', bindings: P1_BINDINGS, assetLoader: this.loader, vfx: this.vfx });
     this.p2 = new Fighter({ id: 'AI-RIGHT', color: 0xff374f, startX: 2.6, modelUrl: '/assets/characters/player2/character.fbx', animationBaseUrl: '/assets/characters/player2', bindings: P2_BINDINGS, assetLoader: this.loader, isAI: true, vfx: this.vfx });
     await Promise.all([this.p1.load(), this.p2.load()]);
     this.scene.add(this.p1.group, this.p2.group);
+    this.applyPlayerStartSliders();
     this.p1.faceOpponent(this.p2);
     this.p2.faceOpponent(this.p1);
   }
@@ -322,6 +382,6 @@ export class FightingGame {
 
   updateHud() { document.getElementById('p1Health').style.width = `${this.p1.health}%`; document.getElementById('p2Health').style.width = `${this.p2.health}%`; }
   checkRoundOver() { if (!(this.p1.health <= 0 || this.p2.health <= 0)) return; const text = document.getElementById('roundText'); this.roundOver = true; text.textContent = this.p1.health <= 0 && this.p2.health <= 0 ? 'DRAW' : (this.p1.health <= 0 ? 'AI WINS' : 'P1 WINS'); const replay = document.getElementById('replayBtn'); if (replay) replay.style.display = 'block'; }
-  resetRound() { if (!this.p1 || !this.p2) return; this.roundOver = false; this.p1.health = 100; this.p2.health = 100; this.p1.koStarted = this.p2.koStarted = false; this.p1.stun = this.p2.stun = 0; this.p1.hitStop = this.p2.hitStop = 0; this.p1.group.position.set(-2.6, 0, 0); this.p2.group.position.set(2.6, 0, 0); this.p1.velocity.set(0, 0, 0); this.p2.velocity.set(0, 0, 0); this.p1.setState('idle'); this.p2.setState('idle'); this.p1.play('idle', 0.05, true, true); this.p2.play('idle', 0.05, true, true); this.p1.faceOpponent(this.p2); this.p2.faceOpponent(this.p1); document.getElementById('roundText').textContent = 'ROUND 1'; document.getElementById('replayBtn').style.display = 'none'; this.updateHud(); }
+  resetRound() { if (!this.p1 || !this.p2) return; this.roundOver = false; this.p1.health = 100; this.p2.health = 100; this.p1.koStarted = this.p2.koStarted = false; this.p1.stun = this.p2.stun = 0; this.p1.hitStop = this.p2.hitStop = 0; this.p1.group.position.set(this.num('p1StartX', -2.6), this.num('p1StartY', 0), this.num('p1StartZ', 0)); this.p2.group.position.set(this.num('p2StartX', 2.6), this.num('p2StartY', 0), this.num('p2StartZ', 0)); this.p1.velocity.set(0, 0, 0); this.p2.velocity.set(0, 0, 0); this.p1.setState('idle'); this.p2.setState('idle'); this.p1.play('idle', 0.05, true, true); this.p2.play('idle', 0.05, true, true); this.p1.faceOpponent(this.p2); this.p2.faceOpponent(this.p1); document.getElementById('roundText').textContent = 'ROUND 1'; document.getElementById('replayBtn').style.display = 'none'; this.updateHud(); }
   onResize() { this.camera.aspect = window.innerWidth / window.innerHeight; this.camera.updateProjectionMatrix(); this.renderer.setSize(window.innerWidth, window.innerHeight); }
 }
