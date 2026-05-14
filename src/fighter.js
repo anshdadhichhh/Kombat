@@ -35,6 +35,10 @@ export class Fighter {
     this.blocking = false;
     this.koStarted = false;
 
+    // Committed position: once an attack lunge fires we store the destination
+    // and enforce it each frame so integrate() can't undo it.
+    this._lungeTargetX = null;
+
     this.maxSpeed = 3.2;
     this.acceleration = 22;
     this.friction = 18;
@@ -94,7 +98,10 @@ export class Fighter {
         const actionName = fileList.length === 1 ? name : `${name}_${index}`;
         const clip = await this.assetLoader.loadAnimationClip(url, actionName);
         const action = this.mixer.clipAction(clip);
-        action.clampWhenFinished = true;
+        // FIX: Do NOT clamp attack/hit/ko animations to their last frame —
+        // that causes the "stuck in place" look when the animation ends.
+        // Instead let them fall through to idle via the state machine.
+        action.clampWhenFinished = false;
         loadedActions.push(action);
         console.log(`[${this.id}] Loaded animation ${name}: ${file}`);
       } catch (err) {
@@ -163,6 +170,7 @@ export class Fighter {
         this.play('ko', 0.05, false, true);
       }
       this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
+      this._lungeTargetX = null;
       this.integrate(dt, arena, opponent);
       this.mixer?.update(dt);
       return;
@@ -175,13 +183,14 @@ export class Fighter {
     if (this.stun > 0) {
       this.stun -= dt;
       this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
+      this._lungeTargetX = null;
       this.integrate(dt, arena, opponent);
       this.mixer?.update(dt);
       return;
     }
 
     if (this.state === STATE.ATTACK) {
-      this.updateAttack(opponent);
+      this.updateAttack(opponent, arena);
       this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
       this.integrate(dt, arena, opponent);
       this.mixer?.update(dt);
@@ -209,26 +218,38 @@ export class Fighter {
       if (left) move -= 1;
       if (right) move += 1;
 
-      if (move !== 0) this.velocity.x = THREE.MathUtils.damp(this.velocity.x, move * this.maxSpeed, this.acceleration, dt);
-      else this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
+      if (move !== 0) {
+        this.velocity.x = THREE.MathUtils.damp(this.velocity.x, move * this.maxSpeed, this.acceleration, dt);
+      } else {
+        this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
+      }
 
       if (this.crouching) {
         this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction * 1.5, dt);
         this.setState(this.blocking ? STATE.BLOCK : STATE.CROUCH);
-        this.play(this.blocking ? 'block' : 'crouch', 0.08, false);
+        // FIX: Loop crouch/block so they don't freeze on last frame
+        this.play(this.blocking ? 'block' : 'crouch', 0.08, true);
       } else if (move !== 0) {
         const animName = Math.sign(move) === this.facing ? 'walkForward' : 'walkBack';
         if (this.state !== STATE.WALK || this.currentActionName !== animName) {
           this.setState(STATE.WALK);
-          this.play(animName, 0.08, false, true);
-        } else if (!this.currentAction?.isRunning()) {
-          this.play(animName, 0.08, false, true);
+          // FIX: Loop walk animations — they should cycle smoothly
+          this.play(animName, 0.08, true, false);
         }
-      } else if (this.state === STATE.WALK && this.currentAction?.isRunning()) {
-        // Key released — let walk animation finish naturally (velocity decays)
+      } else if (this.state === STATE.WALK || this.state === STATE.JUMP) {
+        // Returning from walk/jump — transition to idle
+        if (this.isGrounded) {
+          this.setState(STATE.IDLE);
+          this.play('idle', 0.15);
+        }
       } else {
-        this.setState(STATE.IDLE);
-        this.play('idle', 0.2);
+        // FIX: Only restart idle if we're not already in idle playing smoothly
+        if (this.state !== STATE.IDLE) {
+          this.setState(STATE.IDLE);
+          this.play('idle', 0.15);
+        } else if (!this.currentAction?.isRunning()) {
+          this.play('idle', 0.1, true, true);
+        }
       }
     }
 
@@ -248,20 +269,35 @@ export class Fighter {
     this.attackKind = kind;
     this.attackHasHit = false;
     this.attackLunged = false;
-    this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, 1 / 60);
+    this._lungeTargetX = null;
+    this.velocity.x = 0; // Kill horizontal velocity immediately for crisp attack start
     this.setState(STATE.ATTACK);
     this.play(kind, 0.025, false, true);
   }
 
-  updateAttack(opponent) {
+  updateAttack(opponent, arena) {
     const atk = ATTACKS[this.attackKind];
     const t = this.stateTime;
     if (!atk) return;
-    // Forward lunge at start of active window — moves character forward with the animation
+
+    // FIX: Forward lunge — commit the destination position instead of doing a
+    // one-shot teleport that integrate() can later undo.
     if (!this.attackLunged && t >= atk.startup) {
       this.attackLunged = true;
-      this.group.position.x += atk.push * this.facing;
+      const desired = this.group.position.x + atk.push * this.facing;
+      // Clamp lunge to arena bounds
+      this._lungeTargetX = THREE.MathUtils.clamp(desired, -arena.halfWidth, arena.halfWidth);
     }
+
+    // Smoothly slide to lunge target during the active window
+    if (this._lungeTargetX !== null) {
+      this.group.position.x = THREE.MathUtils.lerp(
+        this.group.position.x,
+        this._lungeTargetX,
+        Math.min(1, 12 * (1 / 60)) // fast but not instant; feels physical
+      );
+    }
+
     if (!this.attackHasHit && t >= atk.startup && t <= atk.startup + atk.active) {
       const dx = opponent.group.position.x - this.group.position.x;
       const dist = Math.abs(dx);
@@ -274,10 +310,17 @@ export class Fighter {
         this.vfx?.spawnHit(hitPoint, new THREE.Vector3(this.facing, 0.15, 0.25), Boolean(hit?.blocked));
       }
     }
+
     if (t >= atk.startup + atk.active + atk.recovery) {
+      // FIX: Keep the committed lunge position — don't snap back.
+      // The lunge target IS where the character now stands.
+      if (this._lungeTargetX !== null) {
+        this.group.position.x = this._lungeTargetX;
+      }
+      this._lungeTargetX = null;
       this.attackKind = null;
       this.setState(STATE.IDLE);
-      this.play('idle', 0.08);
+      this.play('idle', 0.1);
     }
   }
 
@@ -286,7 +329,6 @@ export class Fighter {
     const isBlocking = this.blocking && this.facing === -attacker.facing;
     const damage = isBlocking ? Math.ceil(atk.damage * 0.2) : atk.damage;
     this.health = Math.max(0, this.health - damage);
-    // NO position push and NO knockback velocity. Crossing is allowed.
     this.stun = this.health <= 0 ? 0 : (isBlocking ? 0.12 : 0.32);
     this.hitStop = this.health <= 0 ? 0 : 0.035;
     attacker.hitStop = this.health <= 0 ? 0 : 0.025;
@@ -307,15 +349,24 @@ export class Fighter {
     this.group.position.x += this.velocity.x * dt;
     this.group.position.y += this.velocity.y * dt;
     this.group.position.x = THREE.MathUtils.clamp(this.group.position.x, -arena.halfWidth, arena.halfWidth);
-    // Push through opponent in movement direction — no blocking
-    if (opponent && this.health > 0 && opponent.health > 0) {
+
+    // FIX: Fighters pass through each other — remove collision push entirely.
+    // If you want soft push-apart, uncomment the block below, but the original
+    // logic was inverted and caused jitter. Passthrough is intentional here.
+
+    // Optional soft push-apart (uncomment if you want fighters to not overlap):
+    /*
+    if (opponent && this.health > 0 && opponent.health > 0 && this.state !== STATE.ATTACK) {
       const dx = this.group.position.x - opponent.group.position.x;
-      const minDist = this.radius * 2;
-      if (Math.abs(dx) < minDist) {
-        const moveDir = Math.sign(this.velocity.x);
-        if (moveDir !== 0) this.group.position.x += moveDir * 3.0 * dt;
+      const minDist = this.radius + opponent.radius;
+      if (Math.abs(dx) < minDist && Math.abs(dx) > 0.01) {
+        const pushDir = Math.sign(dx);
+        const overlap = minDist - Math.abs(dx);
+        this.group.position.x += pushDir * overlap * 0.5;
       }
     }
+    */
+
     if (this.group.position.y <= 0) {
       this.group.position.y = 0;
       this.velocity.y = 0;
