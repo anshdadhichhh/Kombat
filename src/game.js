@@ -22,6 +22,8 @@ export class FightingGame {
     this.fightStarted = false;
     this.loadedArena = null;
     this.arenaRoot = null;
+    this.arenas = {};
+    this.currentArenaFile = null;
     this.transformControls = null;
     this.transformHelper = null;
     this.orbitControls = null;
@@ -56,6 +58,7 @@ export class FightingGame {
     this.setupTransformButtons();
     this.setupBackgroundControls();
     this.setupArenaUpload();
+    this.setupArenaSelector();
   }
 
   async init() {
@@ -196,37 +199,45 @@ export class FightingGame {
   }
 
   async loadArenaFromFolder() {
-    const files = ['arena.glb', 'arena1.glb', 'arena2.glb', 'arena.gltf', 'arena.fbx'];
+    const files = ['arena.glb', 'arena1.glb', 'arena2.glb', 'arena3.glb'];
+    let first = null;
     for (const file of files) {
       try {
-        const format = file.endsWith('.fbx') ? 'fbx' : 'glb';
-        const obj = await this.loader.loadObject(`/assets/arena/${file}`, format);
+        const obj = await this.loader.loadObject(`/assets/arena/${file}`, 'glb');
         obj.name = `ArenaModel:${file}`;
-        this.prepareArenaModel(obj);
-        const root = new THREE.Group();
-        root.name = `ArenaRoot:${file}`;
-        root.add(obj);
-        this.scene.add(root);
-        this.arenaRoot = root;
-        this.loadedArena = obj;
-        this.transformControls.attach(root);
-        this.applyArenaDefaultForFile(file);
-        console.log(`Loaded arena from public/assets/arena/${file}`);
-        return;
+        this.arenas[file] = obj;
+        if (!first) {
+          this.prepareArenaModel(obj);
+          const root = new THREE.Group();
+          root.name = `ArenaRoot:${file}`;
+          root.add(obj);
+          this.scene.add(root);
+          this.arenaRoot = root;
+          this.loadedArena = obj;
+          this.currentArenaFile = file;
+          this.transformControls.attach(root);
+          this.applyArenaDefaultForFile(file);
+          console.log(`Loaded arena from public/assets/arena/${file}`);
+          first = file;
+        } else {
+          console.log(`Cached arena from public/assets/arena/${file}`);
+        }
       } catch (err) {
         console.warn(`Arena file not loaded: ${file}`, err.message || err);
       }
     }
-    console.warn('No arena GLB found in public/assets/arena. Using simple fallback floor.');
-    const floor = this.makeFallbackFloor();
-    const root = new THREE.Group();
-    root.name = 'ArenaRoot:fallback';
-    root.add(floor);
-    this.scene.add(root);
-    this.arenaRoot = root;
-    this.loadedArena = floor;
-    this.transformControls.attach(root);
-    this.applyArenaSliders();
+    if (!first) {
+      console.warn('No arena GLB found in public/assets/arena. Using simple fallback floor.');
+      const floor = this.makeFallbackFloor();
+      const root = new THREE.Group();
+      root.name = 'ArenaRoot:fallback';
+      root.add(floor);
+      this.scene.add(root);
+      this.arenaRoot = root;
+      this.loadedArena = floor;
+      this.transformControls.attach(root);
+      this.applyArenaSliders();
+    }
   }
 
   prepareArenaModel(obj) {
@@ -269,14 +280,19 @@ export class FightingGame {
   }
 
   applyArenaDefaultForFile(file) {
-    if (file === 'arena.glb') {
-      this.setInput('arenaScale', 32.503);
-      this.setInput('arenaX', -0.12);
-      this.setInput('arenaY', -5.82);
-      this.setInput('arenaZ', -2.61);
-      this.setInput('arenaRotX', 0);
-      this.setInput('arenaRotY', 133.2);
-      this.setInput('arenaRotZ', 0);
+    const configs = {
+      'arena.glb': { scale: 32.503, x: -0.12, y: -5.82, z: -2.61, rx: 0, ry: 133.2, rz: 0 },
+      'arena2.glb': { scale: 816.856, x: 155.74, y: -89.31, z: -61.37, rx: 0, ry: 133.2, rz: 0 },
+    };
+    const c = configs[file];
+    if (c) {
+      this.setInput('arenaScale', c.scale);
+      this.setInput('arenaX', c.x);
+      this.setInput('arenaY', c.y);
+      this.setInput('arenaZ', c.z);
+      this.setInput('arenaRotX', c.rx);
+      this.setInput('arenaRotY', c.ry);
+      this.setInput('arenaRotZ', c.rz);
     }
     this.applyArenaSliders();
   }
@@ -352,6 +368,25 @@ export class FightingGame {
     this.applyPlayerStartSliders();
     this.p1.faceOpponent(this.p2);
     this.p2.faceOpponent(this.p1);
+  }
+
+  setupArenaSelector() {
+    const sel = document.getElementById('arenaSelect');
+    if (sel) sel.addEventListener('change', () => this.switchArena(sel.value));
+  }
+
+  async switchArena(fileName) {
+    if (fileName === this.currentArenaFile || !this.arenas[fileName]) return;
+    const obj = await this.loader.loadObject(`/assets/arena/${fileName}`, 'glb');
+    obj.name = `ArenaModel:${fileName}`;
+    this.prepareArenaModel(obj);
+    if (this.loadedArena && this.loadedArena.parent) {
+      this.loadedArena.parent.remove(this.loadedArena);
+    }
+    this.arenaRoot.add(obj);
+    this.loadedArena = obj;
+    this.currentArenaFile = fileName;
+    this.applyArenaDefaultForFile(fileName);
   }
 
   setupReplayButton() { const btn = document.getElementById('replayBtn'); if (btn) btn.addEventListener('click', () => this.resetRound()); }

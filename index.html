@@ -23,6 +23,12 @@
 
     <div id="arenaControls">
       <b>Arena GLB Transform</b>
+      <label>Arena <select id="arenaSelect">
+        <option value="arena.glb">Arena Default</option>
+        <option value="arena1.glb">Arena 1</option>
+        <option value="arena2.glb">Arena 2</option>
+        <option value="arena3.glb">Arena 3</option>
+      </select></label>
       <label>Upload <input id="arenaUpload" type="file" accept=".glb,.gltf,.fbx,model/gltf-binary,model/gltf+json"></label>
       <div class="buttonRow">
         <button id="gizmoTranslate">Move</button>
@@ -31,7 +37,7 @@
       </div>
       <label>Orbit <input id="orbitMode" type="checkbox"><span>cam</span></label>
       <div class="buttonRow"><button id="resetCamera" type="button">Reset Camera</button></div>
-      <label>Scale <input id="arenaScale" type="range" min="0.001" max="100" step="0.001" value="32.503"><span id="arenaScaleValue">32.503</span></label>
+      <label>Scale <input id="arenaScale" type="range" min="0.001" max="2000" step="0.001" value="32.503"><span id="arenaScaleValue">32.503</span></label>
       <label>Pos X <input id="arenaX" type="range" min="-1000" max="1000" step="0.01" value="-0.12"><span id="arenaXValue">-0.12</span></label>
       <label>Pos Y <input id="arenaY" type="range" min="-1000" max="1000" step="0.01" value="-5.82"><span id="arenaYValue">-5.82</span></label>
       <label>Pos Z <input id="arenaZ" type="range" min="-1000" max="1000" step="0.01" value="-2.61"><span id="arenaZValue">-2.61</span></label>
@@ -66,7 +72,7 @@
 
     <div id="help">
       <b>P1 LEFT:</b> A/D move, W jump, S block/crouch, Q or Z punch, E or C kick, X heavy<br/>
-      <b>Arena:</b> defaults set for arena.glb. Upload more GLBs, place them, then Copy config and send it.
+      <b>Arena:</b> switch between loaded arenas via dropdown above. Tune position, then Copy config and send it.
     </div>
 
     <script type="module" src="/src/main.js"></script>
