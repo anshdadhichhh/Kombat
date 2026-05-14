@@ -23,6 +23,7 @@
 
     <div id="arenaControls">
       <b>Arena GLB Transform</b>
+      <label>Upload <input id="arenaUpload" type="file" accept=".glb,.gltf,.fbx,model/gltf-binary,model/gltf+json"></label>
       <div class="buttonRow">
         <button id="gizmoTranslate">Move</button>
         <button id="gizmoRotate">Rotate</button>
@@ -30,13 +31,21 @@
       </div>
       <label>Orbit <input id="orbitMode" type="checkbox"><span>cam</span></label>
       <div class="buttonRow"><button id="resetCamera" type="button">Reset Camera</button></div>
-      <label>Scale <input id="arenaScale" type="range" min="0.001" max="100" step="0.001" value="1"><span id="arenaScaleValue">1.000</span></label>
-      <label>Pos X <input id="arenaX" type="range" min="-1000" max="1000" step="0.01" value="0"><span id="arenaXValue">0.00</span></label>
-      <label>Pos Y <input id="arenaY" type="range" min="-1000" max="1000" step="0.01" value="0"><span id="arenaYValue">0.00</span></label>
-      <label>Pos Z <input id="arenaZ" type="range" min="-1000" max="1000" step="0.01" value="0"><span id="arenaZValue">0.00</span></label>
+      <label>Scale <input id="arenaScale" type="range" min="0.001" max="100" step="0.001" value="32.503"><span id="arenaScaleValue">32.503</span></label>
+      <label>Pos X <input id="arenaX" type="range" min="-1000" max="1000" step="0.01" value="-0.12"><span id="arenaXValue">-0.12</span></label>
+      <label>Pos Y <input id="arenaY" type="range" min="-1000" max="1000" step="0.01" value="-5.82"><span id="arenaYValue">-5.82</span></label>
+      <label>Pos Z <input id="arenaZ" type="range" min="-1000" max="1000" step="0.01" value="-2.61"><span id="arenaZValue">-2.61</span></label>
       <label>Rot X <input id="arenaRotX" type="range" min="-180" max="180" step="0.1" value="0"><span id="arenaRotXValue">0.0</span></label>
-      <label>Rot Y <input id="arenaRotY" type="range" min="-180" max="180" step="0.1" value="0"><span id="arenaRotYValue">0.0</span></label>
+      <label>Rot Y <input id="arenaRotY" type="range" min="-180" max="180" step="0.1" value="133.2"><span id="arenaRotYValue">133.2</span></label>
       <label>Rot Z <input id="arenaRotZ" type="range" min="-180" max="180" step="0.1" value="0"><span id="arenaRotZValue">0.0</span></label>
+      <hr />
+      <b>Initial Player Positions</b>
+      <label>P1 X <input id="p1StartX" type="range" min="-100" max="100" step="0.01" value="-2.6"><span id="p1StartXValue">-2.60</span></label>
+      <label>P1 Y <input id="p1StartY" type="range" min="-100" max="100" step="0.01" value="0"><span id="p1StartYValue">0.00</span></label>
+      <label>P1 Z <input id="p1StartZ" type="range" min="-100" max="100" step="0.01" value="0"><span id="p1StartZValue">0.00</span></label>
+      <label>AI X <input id="p2StartX" type="range" min="-100" max="100" step="0.01" value="2.6"><span id="p2StartXValue">2.60</span></label>
+      <label>AI Y <input id="p2StartY" type="range" min="-100" max="100" step="0.01" value="0"><span id="p2StartYValue">0.00</span></label>
+      <label>AI Z <input id="p2StartZ" type="range" min="-100" max="100" step="0.01" value="0"><span id="p2StartZValue">0.00</span></label>
       <hr />
       <b>Export Arena Config</b>
       <div class="buttonRow">
@@ -57,7 +66,7 @@
 
     <div id="help">
       <b>P1 LEFT:</b> A/D move, W jump, S block/crouch, Q or Z punch, E or C kick, X heavy<br/>
-      <b>Arena controls:</b> click Show/Copy after placing arena and send me the JSON.
+      <b>Arena:</b> defaults set for arena.glb. Upload more GLBs, place them, then Copy config and send it.
     </div>
 
     <script type="module" src="/src/main.js"></script>
