@@ -38,6 +38,18 @@
       <label>Rot Y <input id="arenaRotY" type="range" min="-180" max="180" step="0.1" value="0"><span id="arenaRotYValue">0.0</span></label>
       <label>Rot Z <input id="arenaRotZ" type="range" min="-180" max="180" step="0.1" value="0"><span id="arenaRotZValue">0.0</span></label>
       <hr />
+      <b>Export Arena Config</b>
+      <div class="buttonRow">
+        <button id="exportArenaConfig" type="button">Show</button>
+        <button id="copyArenaConfig" type="button">Copy</button>
+      </div>
+      <div class="buttonRow">
+        <button id="saveArenaConfig" type="button">Save Local</button>
+        <button id="loadArenaConfig" type="button">Load Local</button>
+        <button id="applyArenaConfig" type="button">Apply Text</button>
+      </div>
+      <textarea id="arenaConfigOutput" rows="8" placeholder="Click Show/Copy after placing the arena, then send me this JSON."></textarea>
+      <hr />
       <b>Background Image</b>
       <input id="backgroundImage" type="file" accept="image/*" />
       <label>Path <input id="backgroundPath" type="text" value="/assets/arena/background.jpg"><button id="loadBackgroundPath" type="button">Load</button></label>
@@ -45,7 +57,7 @@
 
     <div id="help">
       <b>P1 LEFT:</b> A/D move, W jump, S block/crouch, Q or Z punch, E or C kick, X heavy<br/>
-      <b>Arena controls:</b> enable Orbit to rotate camera; drag colored gizmo arrows to place arena.
+      <b>Arena controls:</b> click Show/Copy after placing arena and send me the JSON.
     </div>
 
     <script type="module" src="/src/main.js"></script>
