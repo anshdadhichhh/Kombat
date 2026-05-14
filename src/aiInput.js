@@ -4,8 +4,9 @@ export class AIInput {
     this.down = new Set();
     this.pressed = new Set();
     this.timer = 0;
-    this.nextAttackAt = 0.6;
+    this.nextAttackAt = 0.8 + Math.random() * 0.5;
     this.blockTimer = 0;
+    this.pauseUntil = 0;
   }
 
   update(dt, self, opponent) {
@@ -18,6 +19,7 @@ export class AIInput {
     const dist = Math.abs(dx);
     const opponentAttacking = opponent.state === 'attack';
 
+    // Reactive blocking — brief window after opponent attacks
     if (opponentAttacking && dist < 1.8 && Math.random() < 0.06) {
       this.blockTimer = 0.28;
     }
@@ -27,18 +29,39 @@ export class AIInput {
       return;
     }
 
-    // AI is player2 on LEFT. It moves toward P1 on RIGHT but never backs up, so it will not separate/push away.
-    if (dist > 1.0) {
+    // Idle pause — stand still for a moment
+    if (this.timer < this.pauseUntil) return;
+    if (Math.random() < 0.003) {
+      this.pauseUntil = this.timer + 0.3 + Math.random() * 0.5;
+      return;
+    }
+
+    // Spacing behaviour
+    if (dist > 3.0) {
+      // Too far — approach
+      if (dx > 0) this.down.add(this.bindings.right);
+      else this.down.add(this.bindings.left);
+    } else if (dist < 1.2) {
+      // Too close — back off 30% of the time
+      if (Math.random() < 0.3) {
+        if (dx > 0) this.down.add(this.bindings.left);
+        else this.down.add(this.bindings.right);
+      }
+    } else if (dist > 2.2) {
+      // Moderate distance — inch closer
       if (dx > 0) this.down.add(this.bindings.right);
       else this.down.add(this.bindings.left);
     }
+    // Between 1.2-2.2: sweet spot, hold position
 
-    if (dist < 1.45 && this.timer >= this.nextAttackAt) {
+    // Attack — varied timing, not always attacking
+    if (dist < 1.6 && this.timer >= this.nextAttackAt) {
       const r = Math.random();
-      if (r < 0.55) this.pressed.add(this.bindings.punch);
-      else if (r < 0.85) this.pressed.add(this.bindings.kick);
-      else this.pressed.add(this.bindings.heavy);
-      this.nextAttackAt = this.timer + 0.55 + Math.random() * 0.55;
+      if (r < 0.35) this.pressed.add(this.bindings.punch);
+      else if (r < 0.55) this.pressed.add(this.bindings.kick);
+      else if (r < 0.7) this.pressed.add(this.bindings.heavy);
+      // 30% chance: feint / do nothing
+      this.nextAttackAt = this.timer + 0.5 + Math.random() * 1.0;
     }
   }
 

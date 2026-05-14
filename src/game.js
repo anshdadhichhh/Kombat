@@ -397,11 +397,13 @@ export class FightingGame {
 
   animate() {
     requestAnimationFrame(() => this.animate());
-    const dt = Math.min(this.clock.getDelta(), 1 / 30);
-    this.orbitControls?.update();
-    this.update(dt);
-    this.vfx.update(dt);
-    this.renderer.render(this.scene, this.camera);
+    try {
+      const dt = Math.min(this.clock.getDelta(), 1 / 30);
+      this.orbitControls?.update();
+      this.update(dt);
+      this.vfx.update(dt);
+      this.renderer.render(this.scene, this.camera);
+    } catch (err) { console.error('Render error:', err); }
     this.input.endFrame();
     this.aiInput.endFrame();
   }
@@ -411,12 +413,30 @@ export class FightingGame {
     if (!this.fightStarted) { this.p1.play('idle', 0.12); this.p2.play('idle', 0.12); this.p1.mixer?.update(dt); this.p2.mixer?.update(dt); return; }
     this.p1.faceOpponent(this.p2);
     this.p2.faceOpponent(this.p1);
-    if (!this.roundOver) { this.aiInput.update(dt, this.p2, this.p1); this.p1.update(dt, this.input, this.p2, this.arena); this.p2.update(dt, this.aiInput, this.p1, this.arena); this.checkRoundOver(); }
-    else { this.p1.update(dt, NEUTRAL_INPUT, this.p2, this.arena); this.p2.update(dt, NEUTRAL_INPUT, this.p1, this.arena); }
+    if (!this.roundOver) {
+      this.aiInput.update(dt, this.p2, this.p1);
+      try { this.p1.update(dt, this.input, this.p2, this.arena); } catch (e) { console.error('P1 update error:', e); }
+      try { this.p2.update(dt, this.aiInput, this.p1, this.arena); } catch (e) { console.error('P2 update error:', e); }
+      this.checkRoundOver();
+    } else {
+      try { this.p1.update(dt, NEUTRAL_INPUT, this.p2, this.arena); } catch (e) { console.error('P1 update error:', e); }
+      try { this.p2.update(dt, NEUTRAL_INPUT, this.p1, this.arena); } catch (e) { console.error('P2 update error:', e); }
+    }
     this.updateHud();
   }
 
-  updateHud() { document.getElementById('p1Health').style.width = `${this.p1.health}%`; document.getElementById('p2Health').style.width = `${this.p2.health}%`; }
+  updateHud() {
+    document.getElementById('p1Health').style.width = `${this.p1.health}%`;
+    document.getElementById('p2Health').style.width = `${this.p2.health}%`;
+    // Sync labels when fighters cross positions so user always knows who is who
+    const p1OnLeft = this.p1.group.position.x < this.p2.group.position.x;
+    const p1Label = document.querySelector('.barWrap:first-child span');
+    const p2Label = document.querySelector('.barWrap.right span');
+    if (p1Label && p2Label) {
+      p1Label.textContent = p1OnLeft ? 'P1 LEFT' : 'P1 RIGHT';
+      p2Label.textContent = p1OnLeft ? 'AI RIGHT' : 'AI LEFT';
+    }
+  }
   checkRoundOver() { if (!(this.p1.health <= 0 || this.p2.health <= 0)) return; const text = document.getElementById('roundText'); this.roundOver = true; text.textContent = this.p1.health <= 0 && this.p2.health <= 0 ? 'DRAW' : (this.p1.health <= 0 ? 'AI WINS' : 'P1 WINS'); const replay = document.getElementById('replayBtn'); if (replay) replay.style.display = 'block'; }
   resetRound() { if (!this.p1 || !this.p2) return; this.roundOver = false; this.p1.health = 100; this.p2.health = 100; this.p1.koStarted = this.p2.koStarted = false; this.p1.stun = this.p2.stun = 0; this.p1.hitStop = this.p2.hitStop = 0; this.p1.group.position.set(this.num('p1StartX', -2.6), this.num('p1StartY', 0), this.num('p1StartZ', 0)); this.p2.group.position.set(this.num('p2StartX', 2.6), this.num('p2StartY', 0), this.num('p2StartZ', 0)); this.p1.velocity.set(0, 0, 0); this.p2.velocity.set(0, 0, 0); this.p1.setState('idle'); this.p2.setState('idle'); this.p1.play('idle', 0.05, true, true); this.p2.play('idle', 0.05, true, true); this.p1.faceOpponent(this.p2); this.p2.faceOpponent(this.p1); document.getElementById('roundText').textContent = 'ROUND 1'; document.getElementById('replayBtn').style.display = 'none'; this.updateHud(); }
   onResize() { this.camera.aspect = window.innerWidth / window.innerHeight; this.camera.updateProjectionMatrix(); this.renderer.setSize(window.innerWidth, window.innerHeight); }

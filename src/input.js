@@ -2,17 +2,28 @@ export class KeyboardInput {
   constructor() {
     this.down = new Set();
     this.pressed = new Set();
+    this.lastKey = null;
+    this.lastKeyTime = 0;
     this.controlCodes = [
       'KeyW','KeyA','KeyS','KeyD','KeyQ','KeyE','KeyC','KeyZ','KeyX'
     ];
 
-    window.addEventListener('keydown', (e) => {
-      const code = e.code;
-      if (!this.down.has(code)) this.pressed.add(code);
-      this.down.add(code);
-      if (this.controlCodes.includes(code)) e.preventDefault();
-    });
-    window.addEventListener('keyup', (e) => this.down.delete(e.code));
+    this._onKeyDown = (e) => {
+      try {
+        const code = e.code;
+        if (!this.down.has(code)) {
+          this.pressed.add(code);
+          this.lastKey = code;
+          this.lastKeyTime = performance.now();
+        }
+        this.down.add(code);
+        if (this.controlCodes.includes(code)) e.preventDefault();
+      } catch (err) { console.error('Input handler error:', err); }
+    };
+    this._onKeyUp = (e) => { try { this.down.delete(e.code); } catch (err) { /* silent */ } };
+
+    window.addEventListener('keydown', this._onKeyDown);
+    window.addEventListener('keyup', this._onKeyUp);
   }
 
   matches(codeOrCodes, set) {

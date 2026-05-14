@@ -56,19 +56,33 @@ function isLocomotionClip(name = '') { return /walk|run|step|move|forward|back/i
 
 export function sanitizeClipForFighter(clip, semanticName = '') {
   if (!isLocomotionClip(semanticName) && !isLocomotionClip(clip.name)) return clip.clone();
-  const rootLike = /(^|[.:/])(root|armature|scene)$/i;
   const hipsLike = /hips|pelvis/i;
   const cleanedTracks = clip.tracks.map((track) => {
     if (!track.name.endsWith('.position')) return track.clone();
-    if (hipsLike.test(track.name)) return track.clone();
-    if (!rootLike.test(track.name) && track.name !== '.position') return track.clone();
+    const boneName = track.name.replace(/\.[^.]+$/, '');
+    if (hipsLike.test(boneName)) return track.clone();
+    // Measure actual X/Z displacement — any bone that moves the whole character
+    // (root, Bip001, mixamorig:Root, etc.) will have large displacement.
+    // Small local bone movement (< 0.05) is untouched.
+    const vals = track.values;
+    let xMin = Infinity, xMax = -Infinity, zMin = Infinity, zMax = -Infinity;
+    for (let j = 0; j < vals.length; j += 3) {
+      const x = vals[j];
+      const z = vals[j + 2];
+      if (x < xMin) xMin = x;
+      if (x > xMax) xMax = x;
+      if (z < zMin) zMin = z;
+      if (z > zMax) zMax = z;
+    }
+    if (xMax - xMin < 0.05 && zMax - zMin < 0.05) return track.clone();
+    // Lock X and Z to first frame — removes root motion
     const cloned = track.clone();
-    const v = cloned.values;
-    const x0 = v[0];
-    const z0 = v[2];
-    for (let i = 0; i < v.length; i += 3) {
-      v[i + 0] = x0;
-      v[i + 2] = z0;
+    const x0 = vals[0];
+    const z0 = vals[2];
+    const cv = cloned.values;
+    for (let j = 0; j < cv.length; j += 3) {
+      cv[j + 0] = x0;
+      cv[j + 2] = z0;
     }
     return cloned;
   });

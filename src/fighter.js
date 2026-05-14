@@ -123,18 +123,29 @@ export class Fighter {
 
   play(name, fade = 0.08, loop = true, forceRestart = false) {
     const next = this.pickAction(name);
-    if (!next) return false;
+    if (!next) {
+      if (!this._warnedMissing?.[name]) {
+        (this._warnedMissing ??= {})[name] = true;
+        console.warn(`[${this.id}] No animation action for "${name}"`);
+      }
+      return false;
+    }
     if (!forceRestart && next === this.currentAction && next.isRunning()) return true;
-    next.paused = false;
-    next.reset();
-    next.enabled = true;
-    next.setEffectiveWeight(1);
-    next.setEffectiveTimeScale(ANIMATION_SPEEDS[name] ?? 1);
-    next.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
-    next.fadeIn(fade).play();
-    if (this.currentAction && this.currentAction !== next) this.currentAction.fadeOut(fade);
-    this.currentAction = next;
-    this.currentActionName = name;
+    try {
+      next.paused = false;
+      next.reset();
+      next.enabled = true;
+      next.setEffectiveWeight(1);
+      next.setEffectiveTimeScale(ANIMATION_SPEEDS[name] ?? 1);
+      next.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
+      next.fadeIn(fade).play();
+      if (this.currentAction && this.currentAction !== next) this.currentAction.fadeOut(fade);
+      this.currentAction = next;
+      this.currentActionName = name;
+    } catch (err) {
+      console.error(`[${this.id}] Animation error on "${name}":`, err);
+      return false;
+    }
     return true;
   }
 
@@ -152,7 +163,7 @@ export class Fighter {
         this.play('ko', 0.05, false, true);
       }
       this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
-      this.integrate(dt, arena);
+      this.integrate(dt, arena, opponent);
       this.mixer?.update(dt);
       return;
     }
@@ -164,7 +175,7 @@ export class Fighter {
     if (this.stun > 0) {
       this.stun -= dt;
       this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
-      this.integrate(dt, arena);
+      this.integrate(dt, arena, opponent);
       this.mixer?.update(dt);
       return;
     }
@@ -172,7 +183,7 @@ export class Fighter {
     if (this.state === STATE.ATTACK) {
       this.updateAttack(opponent);
       this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
-      this.integrate(dt, arena);
+      this.integrate(dt, arena, opponent);
       this.mixer?.update(dt);
       return;
     }
@@ -205,17 +216,23 @@ export class Fighter {
         this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction * 1.5, dt);
         this.setState(this.blocking ? STATE.BLOCK : STATE.CROUCH);
         this.play(this.blocking ? 'block' : 'crouch', 0.08, false);
-      } else if (Math.abs(this.velocity.x) > 0.08) {
-        this.setState(STATE.WALK);
-        const movingTowardFacing = Math.sign(this.velocity.x) === this.facing;
-        this.play(movingTowardFacing ? 'walkForward' : 'walkBack', 0.08);
+      } else if (move !== 0) {
+        const animName = Math.sign(move) === this.facing ? 'walkForward' : 'walkBack';
+        if (this.state !== STATE.WALK || this.currentActionName !== animName) {
+          this.setState(STATE.WALK);
+          this.play(animName, 0.08, false, true);
+        } else if (!this.currentAction?.isRunning()) {
+          this.play(animName, 0.08, false, true);
+        }
+      } else if (this.state === STATE.WALK && this.currentAction?.isRunning()) {
+        // Key released — let walk animation finish naturally (velocity decays)
       } else {
         this.setState(STATE.IDLE);
-        this.play('idle', 0.12);
+        this.play('idle', 0.2);
       }
     }
 
-    this.integrate(dt, arena);
+    this.integrate(dt, arena, opponent);
     this.mixer?.update(dt);
   }
 
@@ -230,6 +247,7 @@ export class Fighter {
     if (this.health <= 0) return;
     this.attackKind = kind;
     this.attackHasHit = false;
+    this.attackLunged = false;
     this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, 1 / 60);
     this.setState(STATE.ATTACK);
     this.play(kind, 0.025, false, true);
@@ -239,6 +257,11 @@ export class Fighter {
     const atk = ATTACKS[this.attackKind];
     const t = this.stateTime;
     if (!atk) return;
+    // Forward lunge at start of active window — moves character forward with the animation
+    if (!this.attackLunged && t >= atk.startup) {
+      this.attackLunged = true;
+      this.group.position.x += atk.push * this.facing;
+    }
     if (!this.attackHasHit && t >= atk.startup && t <= atk.startup + atk.active) {
       const dx = opponent.group.position.x - this.group.position.x;
       const dist = Math.abs(dx);
@@ -278,12 +301,21 @@ export class Fighter {
     return { blocked: isBlocking, ko: this.health <= 0 };
   }
 
-  integrate(dt, arena) {
+  integrate(dt, arena, opponent = null) {
     const wasGrounded = this.isGrounded;
     this.velocity.y += this.gravity * dt;
     this.group.position.x += this.velocity.x * dt;
     this.group.position.y += this.velocity.y * dt;
     this.group.position.x = THREE.MathUtils.clamp(this.group.position.x, -arena.halfWidth, arena.halfWidth);
+    // Push through opponent in movement direction — no blocking
+    if (opponent && this.health > 0 && opponent.health > 0) {
+      const dx = this.group.position.x - opponent.group.position.x;
+      const minDist = this.radius * 2;
+      if (Math.abs(dx) < minDist) {
+        const moveDir = Math.sign(this.velocity.x);
+        if (moveDir !== 0) this.group.position.x += moveDir * 3.0 * dt;
+      }
+    }
     if (this.group.position.y <= 0) {
       this.group.position.y = 0;
       this.velocity.y = 0;
