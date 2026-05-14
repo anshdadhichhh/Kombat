@@ -40,7 +40,7 @@ export class FightingGame {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
@@ -180,7 +180,7 @@ export class FightingGame {
   }
 
   async loadArenaFromUrl(url, name = 'uploaded') {
-    const obj = await this.loader.loadObject(url);
+    const obj = await this.loader.loadObject(url, 'glb');
     obj.name = `ArenaModel:${name}`;
     this.prepareArenaModel(obj);
     if (this.arenaRoot) this.scene.remove(this.arenaRoot);
@@ -199,7 +199,8 @@ export class FightingGame {
     const files = ['arena.glb', 'arena1.glb', 'arena2.glb', 'arena.gltf', 'arena.fbx'];
     for (const file of files) {
       try {
-        const obj = await this.loader.loadObject(`/assets/arena/${file}`);
+        const format = file.endsWith('.fbx') ? 'fbx' : 'glb';
+        const obj = await this.loader.loadObject(`/assets/arena/${file}`, format);
         obj.name = `ArenaModel:${file}`;
         this.prepareArenaModel(obj);
         const root = new THREE.Group();
