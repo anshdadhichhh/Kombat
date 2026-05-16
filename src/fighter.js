@@ -7,7 +7,7 @@ const STATE = {
 };
 
 export class Fighter {
-  constructor({ id, color, startX, modelUrl, animationBaseUrl, bindings, assetLoader, isAI = false, vfx = null }) {
+  constructor({ id, color, startX, modelUrl, animationBaseUrl, bindings, assetLoader, isAI = false, vfx = null, sound = null }) {
     this.id = id;
     this.color = color;
     this.modelUrl = modelUrl;
@@ -16,6 +16,7 @@ export class Fighter {
     this.assetLoader = assetLoader;
     this.isAI = isAI;
     this.vfx = vfx;
+    this.sound = sound;
     this.startX = startX;
 
     this.group = new THREE.Group();
@@ -314,6 +315,8 @@ export class Fighter {
         const frontZ = this.group.position.z + 0.65;
         const hitPoint = new THREE.Vector3((this.group.position.x + opponent.group.position.x) * 0.5, 1.35, frontZ);
         this.vfx?.spawnHit(hitPoint, new THREE.Vector3(this.facing, 0.15, 0.25), Boolean(hit?.blocked));
+        const hitSound = { punch: 'punch', kick: 'punch2', heavy: 'punch3' }[this.attackKind] || 'punch';
+        this.sound?.play(hitSound, 0.7);
       }
     }
 

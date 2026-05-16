@@ -7,6 +7,7 @@ import { Fighter } from './fighter.js';
 import { KeyboardInput, P1_BINDINGS, P2_BINDINGS } from './input.js';
 import { AIInput } from './aiInput.js';
 import { VFXSystem } from './vfx.js';
+import { SoundManager } from './audio.js';
 
 
 const NEUTRAL_INPUT = { isDown: () => false, wasPressed: () => false, endFrame: () => {} };
@@ -61,6 +62,7 @@ export class FightingGame {
     this.container.appendChild(this.renderer.domElement);
 
     this.vfx = new VFXSystem(this.scene, this.camera);
+    this.sound = new SoundManager();
 this.setupOrbitControls();
 this.setupTransformControls();
 setupCameraConfigTools(this.camera, this.orbitControls); 
@@ -84,9 +86,16 @@ window.addEventListener('resize', () => this.onResize());
     this.animate();
     try {
       await Promise.all([this.loadArenaFromFolder(), this.loadFighters()]);
+      try {
+        await this.loadBgModelFromUrl('/assets/backgrounds/sketch_background_terrain.glb');
+      } catch (bgErr) {
+        console.warn('Background model not loaded:', bgErr.message || bgErr);
+      }
+      this.loadSounds();
       this.updateAttackTimingFromUI();
       this.assetsReady = true;
       this.showBoot('ALL ASSETS LOADED. Press PLAY to start.', true);
+      this.sound.play('choose', 0.5);
       this.applyDefaultCameraConfig(); 
       this.updateBgModelSectionVisibility();
 
@@ -487,8 +496,8 @@ applyDefaultCameraConfig() {
 }
 
   async loadFighters() {
-    this.p1 = new Fighter({ id: 'P1-LEFT', color: 0x2f7dff, startX: -2.6, modelUrl: '/assets/characters/player1/character.fbx', animationBaseUrl: '/assets/characters/player1', bindings: P1_BINDINGS, assetLoader: this.loader, vfx: this.vfx });
-    this.p2 = new Fighter({ id: 'AI-RIGHT', color: 0xff374f, startX: 2.6, modelUrl: '/assets/characters/player2/character.fbx', animationBaseUrl: '/assets/characters/player2', bindings: P2_BINDINGS, assetLoader: this.loader, isAI: true, vfx: this.vfx });
+    this.p1 = new Fighter({ id: 'P1-LEFT', color: 0x2f7dff, startX: -2.6, modelUrl: '/assets/characters/player1/character.fbx', animationBaseUrl: '/assets/characters/player1', bindings: P1_BINDINGS, assetLoader: this.loader, vfx: this.vfx, sound: this.sound });
+    this.p2 = new Fighter({ id: 'AI-RIGHT', color: 0xff374f, startX: 2.6, modelUrl: '/assets/characters/player2/character.fbx', animationBaseUrl: '/assets/characters/player2', bindings: P2_BINDINGS, assetLoader: this.loader, isAI: true, vfx: this.vfx, sound: this.sound });
     await Promise.all([this.p1.load(), this.p2.load()]);
     this.scene.add(this.p1.group, this.p2.group);
     this.applyPlayerStartSliders();
@@ -584,6 +593,23 @@ applyDefaultCameraConfig() {
     const section = document.getElementById('bgModelSection');
     if (!section) return;
     section.style.display = this.currentArenaFile === 'arena.glb' ? 'block' : 'none';
+    if (this.bgModelRoot) this.bgModelRoot.visible = this.currentArenaFile !== 'arena2.glb';
+  }
+
+  // ====== SOUND SYSTEM ======
+
+  loadSounds() {
+    const base = '/assets/sound effects';
+    const list = [
+      ['choose', `${base}/Choose your Fighter.mp3`],
+      ['round1', `${base}/Round 1.wav`],
+      ['round2', `${base}/Round 2.wav`],
+      ['ko', `${base}/KO.wav`],
+      ['punch', `${base}/punch.mp3`],
+      ['punch2', `${base}/punch (2).mp3`],
+      ['punch3', `${base}/punch (3).mp3`],
+    ];
+    list.forEach(([name, url]) => this.sound.load(name, url));
   }
 
   // ====== MATCH / ROUND SYSTEM ======
@@ -593,7 +619,7 @@ applyDefaultCameraConfig() {
     if (btn) btn.addEventListener('click', () => this.playAgain());
   }
   setupPlayButton() { const btn = document.getElementById('playBtn'); if (btn) btn.addEventListener('click', () => this.startFight()); }
-  startFight() { if (!this.assetsReady) return; this.fightStarted = true; this.hideBoot(); this.clock.getDelta(); }
+  startFight() { if (!this.assetsReady) return; this.fightStarted = true; this.hideBoot(); this.clock.getDelta(); this.sound.play('round1', 0.7); }
   showBoot(message, showPlay) { const boot = document.getElementById('boot'); const msg = document.getElementById('bootMessage'); const btn = document.getElementById('playBtn'); if (!boot) return; boot.style.display = 'grid'; if (msg) msg.textContent = message; if (btn) btn.style.display = showPlay ? 'inline-block' : 'none'; }
   hideBoot() { const boot = document.getElementById('boot'); if (boot) boot.style.display = 'none'; }
 
@@ -650,6 +676,7 @@ applyDefaultCameraConfig() {
           this.roundTransition.phase = 'starting';
           this.roundTransition.timer = 0;
           roundTextEl.textContent = `ROUND ${this.currentRound}`;
+          if (this.currentRound === 2) this.sound.play('round2', 0.7);
         }
       }
     } else if (this.roundTransition.phase === 'starting') {
@@ -699,6 +726,7 @@ applyDefaultCameraConfig() {
     if (!(this.p1.health <= 0 || this.p2.health <= 0)) return;
 
     this.roundOver = true;
+    this.sound.play('ko', 0.8);
     const isDraw = this.p1.health <= 0 && this.p2.health <= 0;
     let winner = null;
     let resultText = 'DRAW';
