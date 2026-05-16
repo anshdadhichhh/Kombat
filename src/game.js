@@ -39,6 +39,11 @@ export class FightingGame {
     this.matchOver = false;
     this.roundTransition = { active: false, timer: 0, phase: 'idle', winner: null, resultText: '' };
 
+    // Countdown before first round
+    this.countdownActive = false;
+    this.countdownTimer = 0;
+    this.lastCountdownDisplay = -1;
+
     // Background GLB model state
     this.bgModelRoot = null;
     this.bgModelObject = null;
@@ -94,6 +99,7 @@ window.addEventListener('resize', () => this.onResize());
       this.loadSounds();
       this.updateAttackTimingFromUI();
       this.assetsReady = true;
+      this.setBackgroundImage('/assets/backgrounds/bg.png');
       this.showBoot('ALL ASSETS LOADED. Press PLAY to start.', true);
       this.sound.play('choose', 0.5);
       this.applyDefaultCameraConfig(); 
@@ -347,7 +353,7 @@ applyArenaDefaultForFile(file) {
     'arena.glb': { 
       scale: 60.925, 
       x: 2.46,    
-      y: -11.11,   
+      y: -11.15,   
       z: -5.21 ,  
       rx: 0, 
       ry: 133.2, 
@@ -622,7 +628,30 @@ applyDefaultCameraConfig() {
     if (btn) btn.addEventListener('click', () => this.playAgain());
   }
   setupPlayButton() { const btn = document.getElementById('playBtn'); if (btn) btn.addEventListener('click', () => this.startFight()); }
-  startFight() { if (!this.assetsReady) return; this.fightStarted = true; this.hideBoot(); this.clock.getDelta(); this.sound.play('round1', 0.7); }
+  startFight() { if (!this.assetsReady) return; this.fightStarted = true; this.hideBoot(); this.clock.getDelta(); this.countdownActive = true; this.countdownTimer = 3.0; this.lastCountdownDisplay = -1; }
+  handleCountdown(dt) {
+    const el = document.getElementById('countdownText');
+    if (!el) return;
+    this.countdownTimer -= dt;
+    const t = this.countdownTimer;
+    if (t > 0) {
+      const d = Math.ceil(t);
+      if (d !== this.lastCountdownDisplay) {
+        this.lastCountdownDisplay = d;
+        el.textContent = String(d);
+        el.style.display = 'block';
+      }
+    } else if (t > -0.5) {
+      if (this.lastCountdownDisplay !== 0) {
+        this.lastCountdownDisplay = 0;
+        el.textContent = 'FIGHT!';
+        this.sound.play('round1', 0.7);
+      }
+    } else {
+      el.style.display = 'none';
+      this.countdownActive = false;
+    }
+  }
   showBoot(message, showPlay) { const boot = document.getElementById('boot'); const msg = document.getElementById('bootMessage'); const btn = document.getElementById('playBtn'); if (!boot) return; boot.style.display = 'grid'; if (msg) msg.textContent = message; if (btn) btn.style.display = showPlay ? 'inline-block' : 'none'; }
   hideBoot() { const boot = document.getElementById('boot'); if (boot) boot.style.display = 'none'; }
 
@@ -642,6 +671,14 @@ applyDefaultCameraConfig() {
   update(dt) {
     if (!this.assetsReady || !this.p1 || !this.p2) return;
     if (!this.fightStarted) { this.p1.play('idle', 0.12); this.p2.play('idle', 0.12); this.p1.mixer?.update(dt); this.p2.mixer?.update(dt); return; }
+    if (this.countdownActive) {
+      this.handleCountdown(dt);
+      this.p1.play('idle', 0.12);
+      this.p2.play('idle', 0.12);
+      this.p1.mixer?.update(dt);
+      this.p2.mixer?.update(dt);
+      return;
+    }
     this.p1.faceOpponent(this.p2);
     this.p2.faceOpponent(this.p1);
     if (this.roundTransition.active) {

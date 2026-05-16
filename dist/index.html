@@ -5,20 +5,434 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tekken Style JS Fighter</title>
     <style>
-      html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #101827; }
-      #boot { position: fixed; inset: 0; background: #101827; color: #fff; display: grid; place-items: center; font: 16px system-ui, Arial; z-index: 9999; }
-      #playBtn { display:none; margin-top:16px; padding:12px 32px; border-radius:999px; border:2px solid white; background:#ffcc33; font-weight:900; font-size:20px; cursor:pointer; }
+      /* --- GLOBAL STYLES & RESET --- */
+      html, body { 
+        margin: 0; 
+        width: 100%; 
+        height: 100%; 
+        overflow: hidden; 
+        background: #0b0f19; 
+        color: #f3f4f6;
+        font-family: 'Impact', 'Arial Black', system-ui, sans-serif;
+      }
+      canvas { display: block; position: absolute; inset: 0; z-index: 1; }
+
+      /* --- BOOT & LOADING OVERLAY --- */
+      #boot { 
+        position: fixed; 
+        inset: 0; 
+        background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%); 
+        color: #fff; 
+        display: grid; 
+        place-items: center; 
+        z-index: 9999; 
+        transition: opacity 0.5s ease;
+      }
+      .boot-container {
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 24px;
+      }
+      #bootMessage {
+        font-size: 18px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: #94a3b8;
+        font-family: system-ui, sans-serif;
+        font-weight: 500;
+        animation: pulse 1.5s infinite alternate;
+      }
+      
+      /* --- ARCADE ANIMATED SVG SPINNER --- */
+      .loader-svg {
+        width: 80px;
+        height: 80px;
+        animation: rotateAll 4s linear infinite;
+      }
+      .loader-svg circle {
+        fill: none;
+        transform-origin: center;
+      }
+      .loader-svg .outer-ring {
+        stroke: #ff2a5f;
+        stroke-width: 4;
+        stroke-dasharray: 170;
+        stroke-dashoffset: 20;
+        animation: rotateClockwise 1.5s cubic-bezier(0.6, 0.2, 0.2, 1) infinite;
+      }
+      .loader-svg .inner-ring {
+        stroke: #00f2fe;
+        stroke-width: 3;
+        stroke-dasharray: 110;
+        stroke-dashoffset: 40;
+        animation: rotateCounterClockwise 1s linear infinite;
+      }
+      .loader-svg .core-dot {
+        fill: #ffcc33;
+        animation: pulseCore 1s ease-in-out infinite alternate;
+      }
+
+      #playBtn { 
+        display: none; 
+        padding: 14px 40px; 
+        border-radius: 4px; 
+        border: none; 
+        background: linear-gradient(135deg, #ffcc33 0%, #ff9900 100%); 
+        color: #000;
+        font-weight: 900; 
+        font-size: 24px; 
+        letter-spacing: 1px;
+        cursor: pointer; 
+        box-shadow: 0 0 25px rgba(255, 204, 51, 0.5), inset 0 2px 0 rgba(255,255,255,0.4);
+        transform: skewX(-15deg);
+        transition: transform 0.1s, filter 0.2s, box-shadow 0.2s;
+      }
+      #playBtn:hover { 
+        filter: brightness(1.2);
+        box-shadow: 0 0 35px rgba(255, 204, 51, 0.8), inset 0 2px 0 rgba(255,255,255,0.4);
+        transform: skewX(-15deg) scale(1.05);
+      }
+      #playBtn:active {
+        transform: skewX(-15deg) scale(0.98);
+      }
+
+      /* --- PREMIUM COMBAT HUD --- */
+      #hud {
+        position: fixed;
+        top: 20px;
+        left: 4%;
+        right: 4%;
+        display: grid;
+        grid-template-columns: 1fr 180px 1fr;
+        grid-template-rows: auto auto;
+        align-items: center;
+        gap: 4px 24px;
+        z-index: 10;
+        pointer-events: none;
+      }
+      .barWrap { 
+        display: flex; 
+        flex-direction: column;
+        gap: 6px; 
+        font-weight: 900; 
+        text-transform: uppercase;
+        font-size: 18px;
+        letter-spacing: 1px;
+        color: #fff;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.9);
+      }
+      .barWrap span {
+        font-family: 'Impact', sans-serif;
+        padding-left: 6px;
+      }
+      .barWrap.right { 
+        align-items: flex-end; 
+      }
+      .barWrap.right span {
+        padding-left: 0;
+        padding-right: 6px;
+      }
+      .bar { 
+        height: 28px; 
+        width: 100%;
+        border: 3px solid #fff; 
+        background: rgba(30, 10, 10, 0.8); 
+        box-shadow: 0 0 15px rgba(0,0,0,0.7) inset, 0 4px 10px rgba(0,0,0,0.5); 
+        overflow: hidden;
+        transform: skewX(-12deg);
+        position: relative;
+      }
+      .bar::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(rgba(255,255,255,0.15), transparent);
+        pointer-events: none;
+      }
+      .fill { 
+        height: 100%; 
+        width: 100%; 
+        background: linear-gradient(90deg, #ffe84a 0%, #16f27e 40%, #00ffcc 100%); 
+        transition: width 200ms cubic-bezier(0.25, 1, 0.5, 1); 
+        box-shadow: 0 0 12px rgba(22, 242, 126, 0.6);
+      }
+      .barWrap.right .fill { 
+        margin-left: auto; 
+        background: linear-gradient(270deg, #ffe84a 0%, #ff2a5f 40%, #ff0044 100%); 
+        box-shadow: 0 0 12px rgba(255, 42, 95, 0.6);
+      }
+      
+      /* --- CENTRAL ROUND DISPLAY --- */
+      #roundText { 
+        text-align: center; 
+        font-size: 28px; 
+        font-weight: 900; 
+        letter-spacing: 3px; 
+        color: #ffcc33;
+        text-shadow: 0 3px 6px #000, 0 0 15px rgba(255,204,51,0.4);
+        background: rgba(0, 0, 0, 0.6);
+        padding: 4px 12px;
+        border-radius: 4px;
+        border: 1px solid rgba(255,255,255,0.1);
+        backdrop-filter: blur(4px);
+        transform: skewX(-10deg);
+        justify-self: center;
+        min-width: 120px;
+      }
+
+      /* --- WIN/ROUND ROUND DOTS --- */
+      .roundIndicators {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-start;
+        padding-top: 4px;
+        transform: skewX(-12deg);
+      }
+      #p2Indicators {
+        justify-content: flex-end;
+      }
+      .roundDot {
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255,255,255,0.4);
+        background: rgba(15, 23, 42, 0.8);
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);
+        transform: rotate(45deg);
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+      .roundDot.active {
+        background: radial-gradient(circle, #85ff7a 0%, #16f27e 100%);
+        border-color: #fff;
+        box-shadow: 0 0 12px #16f27e, inset 0 1px 0 rgba(255,255,255,0.6);
+        transform: rotate(45deg) scale(1.15);
+      }
+      #p2Indicators .roundDot.active {
+        background: radial-gradient(circle, #ff6b8b 0%, #ff2a5f 100%);
+        border-color: #fff;
+        box-shadow: 0 0 12px #ff2a5f, inset 0 1px 0 rgba(255,255,255,0.6);
+      }
+
+      /* --- ANNOUNCEMENT TEXT OVERLAYS --- */
+      #matchWinnerText {
+        position: fixed;
+        left: 50%;
+        top: 45%;
+        transform: translate(-50%, -50%) skewX(-15deg);
+        z-index: 20;
+        font-size: 72px;
+        font-weight: 900;
+        color: #ffffff;
+        text-shadow: 0 0 10px #ff0055, 0 0 30px #ff0055, 0 4px 20px rgba(0,0,0,0.9);
+        pointer-events: none;
+        display: none;
+        text-align: center;
+        line-height: 1.1;
+        letter-spacing: 2px;
+        animation: scaleIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+      #countdownText {
+        position: fixed;
+        left: 50%;
+        top: 45%;
+        transform: translate(-50%, -50%) scale(0.8) skewX(-10deg);
+        z-index: 25;
+        font-size: 140px;
+        font-weight: 900;
+        color: #ffd93d;
+        text-shadow: 0 0 20px rgba(255,217,61,0.6), 0 8px 30px rgba(0,0,0,1);
+        pointer-events: none;
+        display: none;
+        text-align: center;
+        line-height: 1;
+      }
+
+      /* --- PRIMARY ACTION BUTTONS --- */
+      #replayBtn {
+        display: none;
+        position: fixed;
+        left: 50%;
+        top: 60%;
+        transform: translate(-50%, -50%) skewX(-15deg);
+        z-index: 30;
+        padding: 16px 45px;
+        border: none;
+        border-radius: 4px;
+        background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+        color: #fff;
+        font-size: 24px;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        cursor: pointer;
+        box-shadow: 0 0 30px rgba(79, 172, 254, 0.5), 0 8px 20px rgba(0,0,0,0.4);
+        transition: transform 0.1s, filter 0.2s, box-shadow 0.2s;
+      }
+      #replayBtn:hover { 
+        filter: brightness(1.15);
+        box-shadow: 0 0 40px rgba(79, 172, 254, 0.8);
+        transform: translate(-50%, -50%) skewX(-15deg) scale(1.05);
+      }
+      #replayBtn:active {
+        transform: translate(-50%, -50%) skewX(-15deg) scale(0.98);
+      }
+
+      /* --- INTERACTIVE DEV PANEL (ARENA CONTROLS) --- */
+      #arenaControls {
+        position: fixed;
+        top: 90px;
+        left: 20px;
+        width: 320px;
+        max-height: calc(100vh - 160px);
+        overflow-y: auto;
+        padding: 16px;
+        border-radius: 8px;
+        background: rgba(15, 23, 42, 0.75);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(12px);
+        color: #e2e8f0;
+        z-index: 11;
+        font-family: system-ui, -apple-system, sans-serif;
+        font-size: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      }
+      /* Custom Developer Scrollbar Style */
+      #arenaControls::-webkit-scrollbar { width: 6px; }
+      #arenaControls::-webkit-scrollbar-track { background: transparent; }
+      #arenaControls::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 99px; }
+      #arenaControls::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
+
+      #arenaControls b { 
+        display: block; 
+        margin: 14px 0 8px; 
+        color: #ffcc33; 
+        text-transform: uppercase; 
+        letter-spacing: 0.5px;
+        font-size: 13px;
+        border-left: 3px solid #ffcc33;
+        padding-left: 6px;
+      }
+      #arenaControls b:first-of-type { margin-top: 0; }
+      
+      #arenaControls label {
+        display: grid;
+        grid-template-columns: 75px 1fr 45px;
+        gap: 8px;
+        align-items: center;
+        margin: 8px 0;
+        color: #94a3b8;
+      }
+      #arenaControls input[type="range"] { 
+        -webkit-appearance: none;
+        appearance: none;
+        background: rgba(255,255,255,0.1);
+        height: 6px;
+        border-radius: 99px;
+        outline: none;
+      }
+      #arenaControls input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #00f2fe;
+        cursor: pointer;
+        transition: transform 0.1s;
+      }
+      #arenaControls input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+      #arenaControls select, #arenaControls textarea, #arenaControls input[type="text"] { 
+        background: #1e293b;
+        border: 1px solid rgba(255,255,255,0.15);
+        color: #fff;
+        padding: 5px 8px;
+        border-radius: 4px;
+        outline: none;
+      }
+      #arenaControls select:focus, #arenaControls input[type="text"]:focus { border-color: #00f2fe; }
+
+      #arenaControls span { text-align: right; color: #fff; font-family: monospace; }
+      #arenaControls hr { border: 0; height: 1px; background: rgba(255,255,255,0.1); margin: 16px 0; }
+      #arenaControls textarea { width: 100%; box-sizing: border-box; resize: vertical; font-family: monospace; font-size: 11px; color: #a7f3d0; }
+
+      /* Dev UI Control Row Buttons */
+      .buttonRow { display: flex; gap: 6px; margin: 10px 0; }
+      .buttonRow button {
+        flex: 1;
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 4px;
+        background: rgba(255,255,255,0.06);
+        color: #fff;
+        padding: 7px 10px;
+        cursor: pointer;
+        font-weight: 600;
+        font-family: system-ui, sans-serif;
+        transition: all 0.2s;
+      }
+      .buttonRow button:hover { 
+        background: rgba(255,255,255,0.15); 
+        border-color: rgba(255,255,255,0.4); 
+      }
+      .buttonRow button:active { transform: scale(0.97); }
+
+      /* --- BOTTOM FOOTER HELP HUD --- */
+      #help {
+        position: fixed;
+        bottom: 16px;
+        left: 16px;
+        padding: 12px 16px;
+        border-radius: 6px;
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid rgba(255,255,255,0.08);
+        backdrop-filter: blur(8px);
+        color: #cbd5e1;
+        z-index: 10;
+        font-family: system-ui, sans-serif;
+        font-size: 12px;
+        line-height: 1.6;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        pointer-events: auto;
+      }
+      #help b { color: #ffcc33; letter-spacing: 0.5px; }
+
+      /* --- ANIMATION KEYFRAMES --- */
+      @keyframes pulse { from { opacity: 0.6; } to { opacity: 1; } }
+      @keyframes scaleIn { from { transform: translate(-50%, -50%) skewX(-15deg) scale(0.5); opacity: 0; } to { transform: translate(-50%, -50%) skewX(-15deg) scale(1); opacity: 1; } }
+      @keyframes rotateAll { to { transform: rotate(360deg); } }
+      @keyframes rotateClockwise { to { transform: rotate(360deg); } }
+      @keyframes rotateCounterClockwise { to { transform: rotate(-360deg); } }
+      @keyframes pulseCore { from { transform: scale(0.8); opacity: 0.7; } to { transform: scale(1.1); opacity: 1; } }
     </style>
-    <script type="module" crossorigin src="/assets/index-D3nOtJvL.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-BG9O3KJh.css">
+    <script type="module" crossorigin src="/assets/index-Lz6YHOgp.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BOkPwOJn.css">
   </head>
   <body>
-    <div id="boot"><div style="text-align:center"><div id="bootMessage">Loading arena and fighters...</div><button id="playBtn">PLAY</button></div></div>
+    <!-- BOOT AND LOADING WITH ANIMATED INTERACTIVE ADAPTIVE SVG SCREEN -->
+    <div id="boot">
+      <div class="boot-container">
+        <!-- SVG Ring System Spinner -->
+        <svg class="loader-svg" viewBox="0 0 100 100">
+          <circle class="outer-ring" cx="50" cy="50" r="40" />
+          <circle class="inner-ring" cx="50" cy="50" r="28" />
+          <circle class="core-dot" cx="50" cy="50" r="10" />
+        </svg>
+        <div id="bootMessage">Loading arena and fighters...</div>
+        <button id="playBtn">PLAY</button>
+      </div>
+    </div>
 
+    <!-- MAIN FIGHT HUD -->
     <div id="hud">
-      <div class="barWrap"><span>P1 LEFT</span><div class="bar"><div id="p1Health" class="fill"></div></div></div>
+      <div class="barWrap">
+        <span>P1 LEFT</span>
+        <div class="bar"><div id="p1Health" class="fill"></div></div>
+      </div>
       <div id="roundText">ROUND 1</div>
-      <div class="barWrap right"><span>AI RIGHT</span><div class="bar"><div id="p2Health" class="fill"></div></div></div>
+      <div class="barWrap right">
+        <span>AI RIGHT</span>
+        <div class="bar"><div id="p2Health" class="fill"></div></div>
+      </div>
       <div class="roundIndicators" id="p1Indicators">
         <span class="roundDot"></span>
         <span class="roundDot"></span>
@@ -30,10 +444,13 @@
       </div>
     </div>
 
+    <!-- MAIN TEXT NOTIFICATIONS -->
     <div id="matchWinnerText"></div>
+    <div id="countdownText"></div>
 
-    <button id="replayBtn" style="display:none">Play Again</button>
+    <button id="replayBtn">Play Again</button>
 
+    <!-- SYSTEM DEV CONFIGURATOR CONTROL MATRIX -->
     <div id="arenaControls">
       <b>Arena GLB Transform</b>
       <label>Arena <select id="arenaSelect">
@@ -65,6 +482,7 @@
       <label>AI X <input id="p2StartX" type="range" min="-100" max="100" step="0.01" value="2.6"><span id="p2StartXValue">2.60</span></label>
       <label>AI Y <input id="p2StartY" type="range" min="-100" max="100" step="0.01" value="0"><span id="p2StartYValue">0.00</span></label>
       <label>AI Z <input id="p2StartZ" type="range" min="-100" max="100" step="0.01" value="0"><span id="p2StartZValue">0.00</span></label>
+      <div style="display:none">
       <hr />
       <b>Export Arena Config</b>
       <div class="buttonRow">
@@ -77,88 +495,93 @@
         <button id="applyArenaConfig" type="button">Apply Text</button>
       </div>
       <textarea id="arenaConfigOutput" rows="8" placeholder="Click Show/Copy after placing the arena, then send me this JSON."></textarea>
+      </div>
       <hr />
       <b>Background Image</b>
       <input id="backgroundImage" type="file" accept="image/*" />
       <label>Path <input id="backgroundPath" type="text" value="/assets/arena/background.jpg"><button id="loadBackgroundPath" type="button">Load</button></label>
 
-<hr />
-<div id="bgModelSection" style="display:none">
-  <b>Background GLB Model</b>
-  <label>Upload <input id="bgModelUpload" type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json"></label>
-  <label>Scale <input id="bgModelScale" type="range" min="0.001" max="200" step="0.001" value="95.031"><span id="bgModelScaleValue">95.031</span></label>
-  <label>Pos X <input id="bgModelX" type="range" min="-100" max="100" step="0.01" value="-27.87"><span id="bgModelXValue">-27.87</span></label>
-  <label>Pos Y <input id="bgModelY" type="range" min="-100" max="100" step="0.01" value="-1.63"><span id="bgModelYValue">-1.63</span></label>
-  <label>Pos Z <input id="bgModelZ" type="range" min="-100" max="100" step="0.01" value="-41.67"><span id="bgModelZValue">-41.67</span></label>
-  <label>Rot X <input id="bgModelRotX" type="range" min="-180" max="180" step="0.1" value="15.1"><span id="bgModelRotXValue">15.1</span></label>
-  <label>Rot Y <input id="bgModelRotY" type="range" min="-180" max="180" step="0.1" value="45.1"><span id="bgModelRotYValue">45.1</span></label>
-  <label>Rot Z <input id="bgModelRotZ" type="range" min="-180" max="180" step="0.1" value="5.1"><span id="bgModelRotZValue">5.1</span></label>
-</div>
+      <hr />
+      <div id="bgModelSection" style="display:none">
+        <b>Background GLB Model</b>
+        <label>Upload <input id="bgModelUpload" type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json"></label>
+        <label>Scale <input id="bgModelScale" type="range" min="0.001" max="200" step="0.001" value="95.031"><span id="bgModelScaleValue">95.031</span></label>
+        <label>Pos X <input id="bgModelX" type="range" min="-100" max="100" step="0.01" value="-27.87"><span id="bgModelXValue">-27.87</span></label>
+        <label>Pos Y <input id="bgModelY" type="range" min="-100" max="100" step="0.01" value="-1.63"><span id="bgModelYValue">-1.63</span></label>
+        <label>Pos Z <input id="bgModelZ" type="range" min="-100" max="100" step="0.01" value="-41.67"><span id="bgModelZValue">-41.67</span></label>
+        <label>Rot X <input id="bgModelRotX" type="range" min="-180" max="180" step="0.1" value="15.1"><span id="bgModelRotXValue">15.1</span></label>
+        <label>Rot Y <input id="bgModelRotY" type="range" min="-180" max="180" step="0.1" value="45.1"><span id="bgModelRotYValue">45.1</span></label>
+        <label>Rot Z <input id="bgModelRotZ" type="range" min="-180" max="180" step="0.1" value="5.1"><span id="bgModelRotZValue">5.1</span></label>
+      </div>
 
-<hr />
-<b>Camera Position Config</b>
-<div class="buttonRow">
-  <button id="exportCameraConfig" type="button">Show Camera</button>
-  <button id="copyCameraConfig" type="button">Copy Camera</button>
-</div>
-<div class="buttonRow">
-  <button id="saveCameraConfig" type="button">Save Camera Local</button>
-  <button id="loadCameraConfig" type="button">Load Camera Local</button>
-  <button id="applyCameraConfig" type="button">Apply Camera Text</button>
-</div>
-<textarea id="cameraConfigOutput" rows="8" placeholder="Orbit to your ideal view, then click Show/Copy to export camera position."></textarea>
+      <div style="display:none">
+      <hr />
+      <b>Camera Position Config</b>
+      <div class="buttonRow">
+        <button id="exportCameraConfig" type="button">Show Camera</button>
+        <button id="copyCameraConfig" type="button">Copy Camera</button>
+      </div>
+      <div class="buttonRow">
+        <button id="saveCameraConfig" type="button">Save Camera Local</button>
+        <button id="loadCameraConfig" type="button">Load Camera Local</button>
+        <button id="applyCameraConfig" type="button">Apply Camera Text</button>
+      </div>
+      <textarea id="cameraConfigOutput" rows="8" placeholder="Orbit to your ideal view, then click Show/Copy to export camera position."></textarea>
+      </div>
 
-<hr />
-<b>Attack Timing Controls</b>
-<div style="display:flex; flex-direction:column; gap:14px; margin:8px 0;">
-  
-  <!-- PUNCH -->
-  <div style="background:#1a2332; padding:14px; border-radius:10px; border:1px solid #2d3a52;">
-    <b style="color:#4da6ff">Punch</b><br/>
-    <label>Startup <input id="punchStartup" type="range" min="0.01" max="0.30" step="0.005" value="0.035"><span id="punchStartupValue">0.035s</span></label><br/>
-    <label>Active <input id="punchActive" type="range" min="0.02" max="0.40" step="0.005" value="0.10"><span id="punchActiveValue">0.10s</span></label><br/>
-    <label>Recovery <input id="punchRecovery" type="range" min="0.02" max="0.50" step="0.005" value="0.075"><span id="punchRecoveryValue">0.075s</span></label><br/>
-    <label>Range <input id="punchRange" type="range" min="0.5" max="2.5" step="0.05" value="1.15"><span id="punchRangeValue">1.15</span></label><br/>
-    <label>Push <input id="punchPush" type="range" min="0" max="1.0" step="0.02" value="0.18"><span id="punchPushValue">0.18</span></label><br/>
-    <label>Damage <input id="punchDamage" type="range" min="1" max="30" step="1" value="7"><span id="punchDamageValue">7</span></label>
-  </div>
-  
-  <!-- KICK -->
-  <div style="background:#1a2332; padding:14px; border-radius:10px; border:1px solid #2d3a52;">
-    <b style="color:#ff6b6b">Kick</b><br/>
-    <label>Startup <input id="kickStartup" type="range" min="0.05" max="0.40" step="0.005" value="0.14"><span id="kickStartupValue">0.14s</span></label><br/>
-    <label>Active <input id="kickActive" type="range" min="0.05" max="0.50" step="0.005" value="0.20"><span id="kickActiveValue">0.20s</span></label><br/>
-    <label>Recovery <input id="kickRecovery" type="range" min="0.05" max="0.70" step="0.005" value="0.28"><span id="kickRecoveryValue">0.28s</span></label><br/>
-    <label>Range <input id="kickRange" type="range" min="0.5" max="3.0" step="0.05" value="1.65"><span id="kickRangeValue">1.65</span></label><br/>
-    <label>Push <input id="kickPush" type="range" min="0" max="1.5" step="0.02" value="0.30"><span id="kickPushValue">0.30</span></label><br/>
-    <label>Damage <input id="kickDamage" type="range" min="1" max="40" step="1" value="12"><span id="kickDamageValue">12</span></label>
-  </div>
-  
-  <!-- HEAVY -->
-  <div style="background:#1a2332; padding:14px; border-radius:10px; border:1px solid #2d3a52;">
-    <b style="color:#ffd93d">Heavy</b><br/>
-    <label>Startup <input id="heavyStartup" type="range" min="0.10" max="0.50" step="0.005" value="0.20"><span id="heavyStartupValue">0.20s</span></label><br/>
-    <label>Active <input id="heavyActive" type="range" min="0.05" max="0.60" step="0.005" value="0.24"><span id="heavyActiveValue">0.24s</span></label><br/>
-    <label>Recovery <input id="heavyRecovery" type="range" min="0.10" max="0.80" step="0.005" value="0.40"><span id="heavyRecoveryValue">0.40s</span></label><br/>
-    <label>Range <input id="heavyRange" type="range" min="0.5" max="3.0" step="0.05" value="1.45"><span id="heavyRangeValue">1.45</span></label><br/>
-    <label>Push <input id="heavyPush" type="range" min="0" max="2.0" step="0.02" value="0.40"><span id="heavyPushValue">0.40</span></label><br/>
-    <label>Damage <input id="heavyDamage" type="range" min="1" max="50" step="1" value="16"><span id="heavyDamageValue">16</span></label>
-  </div>
-</div>
+      <hr />
+      <b>Attack Timing Controls</b>
+      <div style="display:flex; flex-direction:column; gap:14px; margin:8px 0;">
+        
+        <!-- PUNCH -->
+        <div style="background:#1a2332; padding:14px; border-radius:10px; border:1px solid #2d3a52;">
+          <b style="color:#4da6ff; margin:0 0 6px 0; border:none; padding:0;">Punch</b><br/>
+          <label>Startup <input id="punchStartup" type="range" min="0.01" max="0.30" step="0.005" value="0.035"><span id="punchStartupValue">0.035s</span></label><br/>
+          <label>Active <input id="punchActive" type="range" min="0.02" max="0.40" step="0.005" value="0.10"><span id="punchActiveValue">0.10s</span></label><br/>
+          <label>Recovery <input id="punchRecovery" type="range" min="0.02" max="0.50" step="0.005" value="0.075"><span id="punchRecoveryValue">0.075s</span></label><br/>
+          <label>Range <input id="punchRange" type="range" min="0.5" max="2.5" step="0.05" value="1.15"><span id="punchRangeValue">1.15</span></label><br/>
+          <label>Push <input id="punchPush" type="range" min="0" max="1.0" step="0.02" value="0.18"><span id="punchPushValue">0.18</span></label><br/>
+          <label>Damage <input id="punchDamage" type="range" min="1" max="30" step="1" value="7"><span id="punchDamageValue">7</span></label>
+        </div>
+        
+        <!-- KICK -->
+        <div style="background:#1a2332; padding:14px; border-radius:10px; border:1px solid #2d3a52;">
+          <b style="color:#ff6b6b; margin:0 0 6px 0; border:none; padding:0;">Kick</b><br/>
+          <label>Startup <input id="kickStartup" type="range" min="0.05" max="0.40" step="0.005" value="0.14"><span id="kickStartupValue">0.14s</span></label><br/>
+          <label>Active <input id="kickActive" type="range" min="0.05" max="0.50" step="0.005" value="0.20"><span id="kickActiveValue">0.20s</span></label><br/>
+          <label>Recovery <input id="kickRecovery" type="range" min="0.05" max="0.70" step="0.005" value="0.28"><span id="kickRecoveryValue">0.28s</span></label><br/>
+          <label>Range <input id="kickRange" type="range" min="0.5" max="3.0" step="0.05" value="1.65"><span id="kickRangeValue">1.65</span></label><br/>
+          <label>Push <input id="kickPush" type="range" min="0" max="1.5" step="0.02" value="0.30"><span id="kickPushValue">0.30</span></label><br/>
+          <label>Damage <input id="kickDamage" type="range" min="1" max="40" step="1" value="12"><span id="kickDamageValue">12</span></label>
+        </div>
+        
+        <!-- HEAVY -->
+        <div style="background:#1a2332; padding:14px; border-radius:10px; border:1px solid #2d3a52;">
+          <b style="color:#ffd93d; margin:0 0 6px 0; border:none; padding:0;">Heavy</b><br/>
+          <label>Startup <input id="heavyStartup" type="range" min="0.10" max="0.50" step="0.005" value="0.20"><span id="heavyStartupValue">0.20s</span></label><br/>
+          <label>Active <input id="heavyActive" type="range" min="0.05" max="0.60" step="0.005" value="0.24"><span id="heavyActiveValue">0.24s</span></label><br/>
+          <label>Recovery <input id="heavyRecovery" type="range" min="0.10" max="0.80" step="0.005" value="0.40"><span id="heavyRecoveryValue">0.40s</span></label><br/>
+          <label>Range <input id="heavyRange" type="range" min="0.5" max="3.0" step="0.05" value="1.45"><span id="heavyRangeValue">1.45</span></label><br/>
+          <label>Push <input id="heavyPush" type="range" min="0" max="2.0" step="0.02" value="0.40"><span id="heavyPushValue">0.40</span></label><br/>
+          <label>Damage <input id="heavyDamage" type="range" min="1" max="50" step="1" value="16"><span id="heavyDamageValue">16</span></label>
+        </div>
+      </div>
 
-<div class="buttonRow">
-  <button id="exportAttackTiming" type="button">Show Timing</button>
-  <button id="copyAttackTiming" type="button">Copy Timing</button>
-</div>
-<div class="buttonRow">
-  <button id="saveAttackTiming" type="button">Save Timing Local</button>
-  <button id="loadAttackTiming" type="button">Load Timing Local</button>
-  <button id="applyAttackTiming" type="button">Apply Timing Text</button>
-</div>
-<textarea id="attackTimingOutput" rows="10" placeholder="Adjust sliders to tune attack feel, then Copy to export frame data."></textarea>
-
+      <div style="display:none">
+      <div class="buttonRow">
+        <button id="exportAttackTiming" type="button">Show Timing</button>
+        <button id="copyAttackTiming" type="button">Copy Timing</button>
+      </div>
+      <div class="buttonRow">
+        <button id="saveAttackTiming" type="button">Save Timing Local</button>
+        <button id="loadAttackTiming" type="button">Load Timing Local</button>
+        <button id="applyAttackTiming" type="button">Apply Timing Text</button>
+      </div>
+      <textarea id="attackTimingOutput" rows="10" placeholder="Adjust sliders to tune attack feel, then Copy to export frame data."></textarea>
+      </div>
     </div>
 
+    <!-- BOTTOM INSTRUMENTATION HELP WINDOW -->
     <div id="help">
       <b>P1 LEFT:</b> A/D move, W jump, S block/crouch, Q or Z punch, E or C kick, X heavy<br/>
       <b>Arena:</b> switch between loaded arenas via dropdown above. Tune position, then Copy config and send it.
