@@ -4,18 +4,45 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tekken Style JS Fighter</title>
-  <style>
-   html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #101827; }
-   #boot { position: fixed; inset: 0; background: #101827; color: #fff; display: grid; place-items: center; font: 16px system-ui, Arial; z-index: 9999; }
-   #playBtn { display:none; margin-top:16px; padding:12px 32px; border-radius:999px; border:2px solid white; background:#ffcc33; font-weight:900; font-size:20px; cursor:pointer; }
-  </style>
-   <script type="module" crossorigin src="/assets/index-DrXBuCIe.js"></script>
-   <link rel="stylesheet" crossorigin href="/assets/index-BOkPwOJn.css">
+   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
+    html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#0b0f1a; color:#fff; font:14px 'Inter',system-ui,Arial,sans-serif; }
+    canvas { display:block; }
+    #boot { position:fixed; inset:0; background:radial-gradient(ellipse at center,#141c2b 0%,#0b0f1a 80%); display:grid; place-items:center; z-index:9999; }
+    .bootCard { text-align:center; padding:50px 70px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:32px; backdrop-filter:blur(12px); box-shadow:0 20px 60px rgba(0,0,0,0.6); }
+    .gameTitle { font-size:68px; font-weight:900; line-height:1; letter-spacing:-2px; background:linear-gradient(135deg,#ffd93d,#ff6b6b,#a855f7); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+    .gameTitle span { font-size:24px; font-weight:600; letter-spacing:6px; background:linear-gradient(90deg,#94a3b8,#cbd5e1); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; display:block; margin-top:8px; }
+    .loaderWrap { width:60px; height:60px; margin:28px auto; animation:spin 1.6s linear infinite; }
+    .spinRing { transform-origin:center; }
+    .dashRing { stroke-dasharray:200; stroke-dashoffset:180; animation:dash 1.6s ease-in-out infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    @keyframes dash { 0%{stroke-dashoffset:180} 50%{stroke-dashoffset:50;transform:rotate(90deg)} 100%{stroke-dashoffset:180;transform:rotate(360deg)} }
+    #playBtn { display:none; margin:10px auto 0; padding:14px 48px; border-radius:999px; border:none; background:linear-gradient(135deg,#ffd93d,#f59e0b); color:#171100; font-size:18px; font-weight:900; cursor:pointer; letter-spacing:2px; box-shadow:0 4px 24px rgba(245,158,11,0.4); transition:transform .15s,box-shadow .2s; }
+    #playBtn:hover { transform:scale(1.05); box-shadow:0 6px 32px rgba(245,158,11,0.55); }
+    #creditsBtn { background:none; border:1px solid rgba(255,255,255,0.2); color:rgba(255,255,255,0.5); margin-top:14px; font-size:12px; letter-spacing:2px; padding:8px 20px; border-radius:999px; cursor:pointer; transition:.2s; }
+    #creditsBtn:hover { border-color:rgba(255,255,255,0.5); color:#fff; }
+    #creditsModal { border:none; border-radius:20px; background:#141c2b; color:#fff; padding:32px 40px; max-width:420px; width:90vw; box-shadow:0 20px 60px rgba(0,0,0,0.8); }
+    #creditsModal::backdrop { background:rgba(0,0,0,0.6); backdrop-filter:blur(6px); }
+    .creditsHead { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+    .creditsHead h2 { margin:0; font-size:20px; letter-spacing:3px; }
+    .closeCredits { background:none; border:1px solid rgba(255,255,255,0.2); color:rgba(255,255,255,0.5); padding:6px 12px; border-radius:999px; cursor:pointer; font-size:14px; }
+    .closeCredits:hover { border-color:rgba(255,255,255,0.5); color:#fff; }
+    .creditsList { line-height:1.8; font-size:13px; color:rgba(255,255,255,0.7); }
+    .creditsList strong { color:#fff; }
+    #arenaSelectors { display:flex; gap:10px; justify-content:center; margin-top:14px; }
+    .arenaBtn { padding:8px 20px; border-radius:999px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.5); font-size:12px; font-weight:800; letter-spacing:1px; cursor:pointer; transition:.2s; }
+    .arenaBtn:hover { background:rgba(255,255,255,0.1); color:#fff; }
+    .arenaBtn.active { background:rgba(255,255,255,0.12); border-color:#ffd93d; color:#ffd93d; }
+   </style>
+   <script type="module" crossorigin src="/assets/index-XrcXYh7T.js"></script>
+   <link rel="stylesheet" crossorigin href="/assets/index-pSdAu18n.css">
  </head>
  <body>
-  <div id="boot"><div style="text-align:center"><div id="bootMessage">Loading arena and fighters...</div><button id="playBtn">PLAY</button></div></div>
+   <div id="boot"><div class="bootCard"><div class="gameTitle">FIGHT<br><span>TEKKEN STYLE</span></div><div class="loaderWrap" id="loaderWrap"><svg viewBox="0 0 100 100"><circle class="spinRing" cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="3"/><circle class="spinRing dashRing" cx="50" cy="50" r="44" fill="none" stroke="#ffcc33" stroke-width="3"/></svg></div><div id="bootMessage">Loading arena and fighters...</div><button id="playBtn">PLAY</button><div id="arenaSelectors"><button class="arenaBtn active" data-arena="arena.glb">Arena</button><button class="arenaBtn" data-arena="arena2.glb">Arena 2</button></div></div><button id="creditsBtn">CREDITS</button></div>
 
-  <div id="hud">
+   <dialog id="creditsModal"><div class="creditsHead"><h2>CREDITS</h2><button class="closeCredits">✕</button></div><div class="creditsList"><p><strong>Tekken Style JS Fighter</strong></p><p>Built with Three.js</p><p>Fighter models, animations, and arena assets from public domain sources.</p><p>Sound effects from free sound libraries.</p><p>Special thanks to the open-source community.</p></div></dialog>
+
+   <div id="hud">
    <div class="barWrap"><span>P1 LEFT</span><div class="bar"><div id="p1Health" class="fill"></div></div></div>
    <div id="roundText">ROUND 1</div>
    <div class="barWrap right"><span>AI RIGHT</span><div class="bar"><div id="p2Health" class="fill"></div></div></div>
@@ -37,13 +64,7 @@
   <button id="replayBtn" style="display:none">Play Again</button>
 
   <div id="arenaControls">
-   <b>Arena GLB Transform</b>
-   <label>Arena <select id="arenaSelect">
-    <option value="arena.glb">Arena Default</option>
-    <option value="arena1.glb">Arena 1</option>
-    <option value="arena2.glb">Arena 2</option>
-    <option value="arena3.glb">Arena 3</option>
-   </select></label>
+    <b>Arena GLB Transform</b>
    <label>Upload <input id="arenaUpload" type="file" accept=".glb,.gltf,.fbx,model/gltf-binary,model/gltf+json"></label>
    <div class="buttonRow">
     <button id="gizmoTranslate">Move</button>

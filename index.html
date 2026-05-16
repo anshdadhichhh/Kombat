@@ -1,174 +1,393 @@
 <!doctype html>
-<html lang="en">
- <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tekken Style JS Fighter</title>
-  <style>
-   html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #101827; }
-   #boot { position: fixed; inset: 0; background: #101827; color: #fff; display: grid; place-items: center; font: 16px system-ui, Arial; z-index: 9999; }
-   #playBtn { display:none; margin-top:16px; padding:12px 32px; border-radius:999px; border:2px solid white; background:#ffcc33; font-weight:900; font-size:20px; cursor:pointer; }
-  </style>
- </head>
- <body>
-  <div id="boot"><div style="text-align:center"><div id="bootMessage">Loading arena and fighters...</div><button id="playBtn">PLAY</button></div></div>
+<html lang="en" style="scroll-behavior: auto;">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tekken Style JS Fighter</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&display=swap');
 
-  <div id="hud">
-   <div class="barWrap"><span>P1 LEFT</span><div class="bar"><div id="p1Health" class="fill"></div></div></div>
-   <div id="roundText">ROUND 1</div>
-   <div class="barWrap right"><span>AI RIGHT</span><div class="bar"><div id="p2Health" class="fill"></div></div></div>
-   <div class="roundIndicators" id="p1Indicators">
-    <span class="roundDot"></span>
-    <span class="roundDot"></span>
-   </div>
-   <div></div>
-   <div class="roundIndicators" id="p2Indicators">
-    <span class="roundDot"></span>
-    <span class="roundDot"></span>
-   </div>
-  </div>
+      html, body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at top, rgba(104, 164, 255, 0.18), transparent 35%),
+          linear-gradient(180deg, #0a1020 0%, #111b31 45%, #0a1020 100%);
+        color: #fff;
+        font-family: 'Big Shoulders Display', system-ui, Arial, sans-serif;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
 
-  <div id="matchWinnerText"></div>
+      canvas { display: block; }
 
-  <div id="countdownText"></div>
+      /* --- BOOT MODAL & SCREEN --- */
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(circle at center, rgba(255, 255, 255, 0.02), transparent 45%),
+          linear-gradient(180deg, #060913 0%, #0b1121 100%);
+        color: #fff;
+        overflow-y: auto;
+        padding: 20px 0;
+      }
 
-  <button id="replayBtn" style="display:none">Play Again</button>
+      .bootCard {
+        width: min(560px, calc(100vw - 32px));
+        padding: 40px 32px 32px;
+        border: 2px solid rgba(255, 213, 106, 0.2);
+        background: rgba(10, 16, 32, 0.85);
+        backdrop-filter: blur(20px);
+        box-shadow:
+          0 30px 90px rgba(0, 0, 0, 0.8),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        text-align: center;
+        position: relative;
+        margin: auto;
+      }
 
-  <div id="arenaControls">
-   <b>Arena GLB Transform</b>
-   <label>Arena <select id="arenaSelect">
-    <option value="arena.glb">Arena Default</option>
-    <option value="arena1.glb">Arena 1</option>
-    <option value="arena2.glb">Arena 2</option>
-    <option value="arena3.glb">Arena 3</option>
-   </select></label>
-   <label>Upload <input id="arenaUpload" type="file" accept=".glb,.gltf,.fbx,model/gltf-binary,model/gltf+json"></label>
-   <div class="buttonRow">
-    <button id="gizmoTranslate">Move</button>
-    <button id="gizmoRotate">Rotate</button>
-    <button id="gizmoScale">Scale</button>
-   </div>
-   <label>Orbit <input id="orbitMode" type="checkbox"><span>cam</span></label>
-   <div class="buttonRow"><button id="resetCamera" type="button">Reset Camera</button></div>
-   <label>Scale <input id="arenaScale" type="range" min="0.001" max="2000" step="0.001" value="32.503"><span id="arenaScaleValue">32.503</span></label>
-   <label>Pos X <input id="arenaX" type="range" min="-1000" max="1000" step="0.01" value="-0.12"><span id="arenaXValue">-0.12</span></label>
-   <label>Pos Y <input id="arenaY" type="range" min="-1000" max="1000" step="0.01" value="-5.82"><span id="arenaYValue">-5.82</span></label>
-   <label>Pos Z <input id="arenaZ" type="range" min="-1000" max="1000" step="0.01" value="-2.61"><span id="arenaZValue">-2.61</span></label>
-   <label>Rot X <input id="arenaRotX" type="range" min="-180" max="180" step="0.1" value="0"><span id="arenaRotXValue">0.0</span></label>
-   <label>Rot Y <input id="arenaRotY" type="range" min="-180" max="180" step="0.1" value="133.2"><span id="arenaRotYValue">133.2</span></label>
-   <label>Rot Z <input id="arenaRotZ" type="range" min="-180" max="180" step="0.1" value="0"><span id="arenaRotZValue">0.0</span></label>
-   <hr />
-   <b>Initial Player Positions</b>
-   <label>P1 X <input id="p1StartX" type="range" min="-100" max="100" step="0.01" value="-2.6"><span id="p1StartXValue">-2.60</span></label>
-   <label>P1 Y <input id="p1StartY" type="range" min="-100" max="100" step="0.01" value="0"><span id="p1StartYValue">0.00</span></label>
-   <label>P1 Z <input id="p1StartZ" type="range" min="-100" max="100" step="0.01" value="0"><span id="p1StartZValue">0.00</span></label>
-   <label>AI X <input id="p2StartX" type="range" min="-100" max="100" step="0.01" value="2.6"><span id="p2StartXValue">2.60</span></label>
-   <label>AI Y <input id="p2StartY" type="range" min="-100" max="100" step="0.01" value="0"><span id="p2StartYValue">0.00</span></label>
-   <label>AI Z <input id="p2StartZ" type="range" min="-100" max="100" step="0.01" value="0"><span id="p2StartZValue">0.00</span></label>
-   <hr />
-   <b>Export Arena Config</b>
-   <div class="buttonRow">
-    <button id="exportArenaConfig" type="button">Show</button>
-    <button id="copyArenaConfig" type="button">Copy</button>
-   </div>
-   <div class="buttonRow">
-    <button id="saveArenaConfig" type="button">Save Local</button>
-    <button id="loadArenaConfig" type="button">Load Local</button>
-    <button id="applyArenaConfig" type="button">Apply Text</button>
-   </div>
-   <textarea id="arenaConfigOutput" rows="8" placeholder="Click Show/Copy after placing the arena, then send me this JSON."></textarea>
-   <hr />
-   <b>Background Image</b>
-   <input id="backgroundImage" type="file" accept="image/*" />
-   <label>Path <input id="backgroundPath" type="text" value="/assets/arena/background.jpg"><button id="loadBackgroundPath" type="button">Load</button></label>
+      .bootCard::before, .bootCard::after {
+        content: '';
+        position: absolute;
+        width: 16px;
+        height: 16px;
+        border: 2px solid #ffd56a;
+      }
+      .bootCard::before { top: -2px; left: -2px; border-right: 0; border-bottom: 0; }
+      .bootCard::after { bottom: -2px; right: -2px; border-left: 0; border-top: 0; }
 
-<hr />
-<div id="bgModelSection" style="display:none">
- <b>Background GLB Model</b>
- <label>Upload <input id="bgModelUpload" type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json"></label>
- <label>Scale <input id="bgModelScale" type="range" min="0.001" max="200" step="0.001" value="95.031"><span id="bgModelScaleValue">95.031</span></label>
- <label>Pos X <input id="bgModelX" type="range" min="-100" max="100" step="0.01" value="-27.87"><span id="bgModelXValue">-27.87</span></label>
- <label>Pos Y <input id="bgModelY" type="range" min="-100" max="100" step="0.01" value="-1.63"><span id="bgModelYValue">-1.63</span></label>
- <label>Pos Z <input id="bgModelZ" type="range" min="-100" max="100" step="0.01" value="-41.67"><span id="bgModelZValue">-41.67</span></label>
- <label>Rot X <input id="bgModelRotX" type="range" min="-180" max="180" step="0.1" value="15.1"><span id="bgModelRotXValue">15.1</span></label>
- <label>Rot Y <input id="bgModelRotY" type="range" min="-180" max="180" step="0.1" value="45.1"><span id="bgModelRotYValue">45.1</span></label>
- <label>Rot Z <input id="bgModelRotZ" type="range" min="-180" max="180" step="0.1" value="5.1"><span id="bgModelRotZValue">5.1</span></label>
-</div>
+      .gameTitle {
+        margin: 0 0 15px;
+        font-size: clamp(50px, 9vw, 84px);
+        font-weight: 900;
+        line-height: 0.85;
+        letter-spacing: 0.02em;
+        font-style: italic;
+        background: linear-gradient(180deg, #ffffff 15%, #ffd56a 55%, #ff9100 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));
+      }
 
-<hr />
-<b>Arena Boundary</b>
-<label>Show <input id="showBoundary" type="checkbox" checked></label>
-<label>Center X <input id="boundaryX" type="range" min="-20" max="20" step="0.01" value="0"><span id="boundaryXValue">0.00</span></label>
-<label>Radius <input id="boundaryRadius" type="range" min="1" max="20" step="0.01" value="7"><span id="boundaryRadiusValue">7.00</span></label>
-<hr />
-<b>Camera Position Config</b>
-<div class="buttonRow">
- <button id="exportCameraConfig" type="button">Show Camera</button>
- <button id="copyCameraConfig" type="button">Copy Camera</button>
-</div>
-<div class="buttonRow">
- <button id="saveCameraConfig" type="button">Save Camera Local</button>
- <button id="loadCameraConfig" type="button">Load Camera Local</button>
- <button id="applyCameraConfig" type="button">Apply Camera Text</button>
-</div>
-<textarea id="cameraConfigOutput" rows="8" placeholder="Orbit to your ideal view, then click Show/Copy to export camera position."></textarea>
+      .gameTitle span {
+        display: block;
+        font-size: 0.28em;
+        letter-spacing: 0.4em;
+        color: #8fb6e8;
+        font-style: normal;
+        margin-top: 10px;
+        font-weight: 700;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+      }
 
-<hr />
-<b>Attack Timing Controls</b>
-<div style="display:flex; flex-direction:column; gap:14px; margin:8px 0;">
- 
- <!-- PUNCH -->
- <div style="background:#1a2332; padding:14px; border-radius:10px; border:1px solid #2d3a52;">
-  <b style="color:#4da6ff">Punch</b><br/>
-  <label>Startup <input id="punchStartup" type="range" min="0.01" max="0.30" step="0.005" value="0.035"><span id="punchStartupValue">0.035s</span></label><br/>
-  <label>Active <input id="punchActive" type="range" min="0.02" max="0.40" step="0.005" value="0.10"><span id="punchActiveValue">0.10s</span></label><br/>
-  <label>Recovery <input id="punchRecovery" type="range" min="0.02" max="0.50" step="0.005" value="0.075"><span id="punchRecoveryValue">0.075s</span></label><br/>
-  <label>Range <input id="punchRange" type="range" min="0.5" max="2.5" step="0.05" value="1.15"><span id="punchRangeValue">1.15</span></label><br/>
-  <label>Push <input id="punchPush" type="range" min="0" max="1.0" step="0.02" value="0.18"><span id="punchPushValue">0.18</span></label><br/>
-  <label>Damage <input id="punchDamage" type="range" min="1" max="30" step="1" value="7"><span id="punchDamageValue">7</span></label>
- </div>
- 
- <!-- KICK -->
- <div style="background:#1a2332; padding:14px; border-radius:10px; border:1px solid #2d3a52;">
-  <b style="color:#ff6b6b">Kick</b><br/>
-  <label>Startup <input id="kickStartup" type="range" min="0.05" max="0.40" step="0.005" value="0.14"><span id="kickStartupValue">0.14s</span></label><br/>
-  <label>Active <input id="kickActive" type="range" min="0.05" max="0.50" step="0.005" value="0.20"><span id="kickActiveValue">0.20s</span></label><br/>
-  <label>Recovery <input id="kickRecovery" type="range" min="0.05" max="0.70" step="0.005" value="0.28"><span id="kickRecoveryValue">0.28s</span></label><br/>
-  <label>Range <input id="kickRange" type="range" min="0.5" max="3.0" step="0.05" value="1.65"><span id="kickRangeValue">1.65</span></label><br/>
-  <label>Push <input id="kickPush" type="range" min="0" max="1.5" step="0.02" value="0.30"><span id="kickPushValue">0.30</span></label><br/>
-  <label>Damage <input id="kickDamage" type="range" min="1" max="40" step="1" value="12"><span id="kickDamageValue">12</span></label>
- </div>
- 
- <!-- HEAVY -->
- <div style="background:#1a2332; padding:14px; border-radius:10px; border:1px solid #2d3a52;">
-  <b style="color:#ffd93d">Heavy</b><br/>
-  <label>Startup <input id="heavyStartup" type="range" min="0.10" max="0.50" step="0.005" value="0.20"><span id="heavyStartupValue">0.20s</span></label><br/>
-  <label>Active <input id="heavyActive" type="range" min="0.05" max="0.60" step="0.005" value="0.24"><span id="heavyActiveValue">0.24s</span></label><br/>
-  <label>Recovery <input id="heavyRecovery" type="range" min="0.10" max="0.80" step="0.005" value="0.40"><span id="heavyRecoveryValue">0.40s</span></label><br/>
-  <label>Range <input id="heavyRange" type="range" min="0.5" max="3.0" step="0.05" value="1.45"><span id="heavyRangeValue">1.45</span></label><br/>
-  <label>Push <input id="heavyPush" type="range" min="0" max="2.0" step="0.02" value="0.40"><span id="heavyPushValue">0.40</span></label><br/>
-  <label>Damage <input id="heavyDamage" type="range" min="1" max="50" step="1" value="16"><span id="heavyDamageValue">16</span></label>
- </div>
-</div>
+      #bootMessage {
+        margin-top: 12px;
+        color: rgba(255,255,255,0.7);
+        font-size: 18px;
+        letter-spacing: 0.08em;
+      }
 
-<div class="buttonRow">
- <button id="exportAttackTiming" type="button">Show Timing</button>
- <button id="copyAttackTiming" type="button">Copy Timing</button>
-</div>
-<div class="buttonRow">
- <button id="saveAttackTiming" type="button">Save Timing Local</button>
- <button id="loadAttackTiming" type="button">Load Timing Local</button>
- <button id="applyAttackTiming" type="button">Apply Timing Text</button>
-</div>
-<textarea id="attackTimingOutput" rows="10" placeholder="Adjust sliders to tune attack feel, then Copy to export frame data."></textarea>
+      .loaderWrap {
+        display: grid;
+        place-items: center;
+        margin: 24px auto 18px;
+        width: 92px;
+        height: 92px;
+      }
 
-  </div>
+      .loaderWrap svg {
+        width: 92px;
+        height: 92px;
+        overflow: visible;
+        filter: drop-shadow(0 0 20px rgba(255, 208, 94, 0.4));
+      }
 
-  <div id="help">
-   <b>P1 LEFT:</b> A/D move, W jump, S block/crouch, Q or Z punch, E or C kick, X heavy<br/>
-   <b>Arena:</b> switch between loaded arenas via dropdown above. Tune position, then Copy config and send it.
-  </div>
+      .spinRing { transform-origin: 50% 50%; animation: spin 1.05s linear infinite; }
+      .dashRing { stroke-dasharray: 138; stroke-dashoffset: 138; animation: dash 1.3s ease-in-out infinite; }
 
-  <script type="module" src="/src/main.js"></script>
- </body>
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes dash {
+        0%   { stroke-dashoffset: 138; opacity: 0.4; }
+        50%  { stroke-dashoffset: 35;  opacity: 1; }
+        100% { stroke-dashoffset: 138; opacity: 0.4; }
+      }
+
+      #playBtn {
+        display: none;
+        margin: 20px auto 0;
+        padding: 12px 46px;
+        border: 2px solid #fff;
+        background: linear-gradient(180deg, #ffe88a 0%, #ffbb00 100%);
+        color: #0b0f19;
+        font-weight: 900;
+        font-size: 26px;
+        font-style: italic;
+        letter-spacing: 0.06em;
+        cursor: pointer;
+        transform: skewX(-12deg);
+        box-shadow: 0 8px 24px rgba(255, 187, 0, 0.3);
+        transition: transform 0.1s, filter 0.1s;
+      }
+      #playBtn:hover { filter: brightness(1.15); transform: skewX(-12deg) scale(1.04); }
+
+      #creditsBtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 20px;
+        padding: 8px 24px;
+        border: 1px solid rgba(255,255,255,0.2);
+        background: rgba(255,255,255,0.04);
+        color: rgba(255,255,255,0.8);
+        cursor: pointer;
+        font-weight: 700;
+        font-size: 16px;
+        letter-spacing: 0.08em;
+        transform: skewX(-12deg);
+        transition: background 0.2s, color 0.2s;
+      }
+      #creditsBtn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+      /* Arena Buttons Style to match Kombat Style */
+      #arenaSelectors { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+      .arenaBtn {
+        padding: 8px 20px;
+        border: 1px solid rgba(255,255,255,0.2);
+        background: rgba(255,255,255,0.05);
+        color: rgba(255,255,255,0.6);
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: 1px;
+        cursor: pointer;
+        transform: skewX(-12deg);
+        transition: 0.2s;
+      }
+      .arenaBtn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+      .arenaBtn.active { border-color: #ffd56a; color: #ffd56a; background: rgba(255, 213, 106, 0.1); }
+
+      /* --- INTEGRATED CONTROLS DISPLAY --- */
+      #help {
+        margin-top: 28px;
+        padding: 16px;
+        background: rgba(6, 9, 15, 0.6);
+        border: 1px solid rgba(255, 213, 106, 0.15);
+        border-left: 4px solid #ffcc33;
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 15px;
+        line-height: 1.6;
+        text-align: left;
+        text-transform: none;
+        letter-spacing: 0.02em;
+      }
+      #help b { color: #ffcc33; font-size: 16px; letter-spacing: 0.04em; text-transform: uppercase; display: inline-block; margin-bottom: 4px; }
+
+      /* --- DIALOG MODAL --- */
+      #creditsModal {
+        width: min(520px, calc(100vw - 28px));
+        border: 2px solid rgba(255,255,255,0.15);
+        background: rgba(11, 16, 29, 0.96);
+        color: #fff;
+        box-shadow: 0 30px 110px rgba(0,0,0,0.8);
+        padding: 24px;
+      }
+      #creditsModal::backdrop { background: rgba(4, 6, 12, 0.85); backdrop-filter: blur(6px); }
+      .creditsHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; }
+      .creditsHead h2 { margin: 0; font-size: 28px; font-style: italic; background: linear-gradient(180deg, #fff, #9bb8df); -webkit-background-clip: text; background-clip: text; color: transparent; }
+      .closeCredits { border: 1px solid rgba(255,255,255,0.3); padding: 6px 16px; background: rgba(255,255,255,0.08); color: #fff; cursor: pointer; transform: skewX(-10deg); }
+      .creditsList { display: grid; gap: 12px; font-size: 18px; text-transform: none; }
+      .creditsList strong { color: #ffd86b; font-weight: 900; }
+
+      /* --- COMBAT HUD FRAME --- */
+      #hud {
+        position: fixed;
+        top: 20px;
+        left: 30px;
+        right: 30px;
+        display: grid;
+        grid-template-columns: 1fr 140px 1fr;
+        grid-template-rows: auto auto;
+        align-items: center;
+        gap: 4px 20px;
+        z-index: 10;
+        pointer-events: none;
+      }
+      .barWrap { display: flex; align-items: center; gap: 12px; font-weight: 900; font-size: 20px; font-style: italic; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
+      .barWrap.right { flex-direction: row-reverse; }
+      .bar { height: 26px; flex: 1; border: 2px solid #fff; background: rgba(18, 10, 10, 0.85); overflow: hidden; position: relative; transform: skewX(-14deg); }
+      .barWrap:not(.right) .bar { clip-path: polygon(0 0, 100% 0, 97% 100%, 0 100%); }
+      .barWrap.right .bar { clip-path: polygon(3% 0, 100% 0, 100% 100%, 0 100%); }
+      .fill { height: 100%; width: 100%; background: linear-gradient(180deg, #bfff47 0%, #16f27e 50%, #00873c 100%); transition: width 120ms cubic-bezier(0.25, 1, 0.5, 1); }
+      #roundText { text-align: center; font-size: 24px; font-weight: 900; font-style: italic; background: linear-gradient(180deg, #ff4141 0%, #990000 100%); padding: 4px 10px; border: 2px solid #fff; transform: skewX(-14deg); }
+      .roundIndicators { display: flex; gap: 10px; justify-content: flex-start; padding-top: 6px; }
+      #p2Indicators { justify-content: flex-end; }
+      .roundDot { width: 13px; height: 13px; border: 2px solid rgba(255,255,255,0.35); background: rgba(0,0,0,0.6); transform: rotate(45deg); margin: 2px 6px; }
+      .roundDot.active { background: #00ff66; border-color: #fff; box-shadow: 0 0 14px #00ff66; }
+      #p2Indicators .roundDot.active { background: #ff0044; border-color: #fff; box-shadow: 0 0 14px #ff0044; }
+
+      /* --- NOTIFICATIONS --- */
+      #matchWinnerText { position: fixed; left: 50%; top: 46%; transform: translate(-50%, -50%) skewX(-10deg); z-index: 20; font-size: 72px; font-weight: 900; font-style: italic; color: #ffd93d; text-shadow: 0 4px 0 #000, 0 8px 25px rgba(0,0,0,0.9); display: none; text-align: center; }
+      #countdownText { position: fixed; left: 50%; top: 45%; transform: translate(-50%, -50%) skewX(-12deg); z-index: 25; font-size: 160px; font-weight: 900; font-style: italic; background: linear-gradient(180deg, #fff 20%, #ffea6c 60%, #ff9000 100%); -webkit-background-clip: text; color: transparent; display: none; text-align: center; }
+      #replayBtn { display: none; position: fixed; left: 50%; top: 58%; transform: translate(-50%, -50%) skewX(-12deg); z-index: 30; padding: 14px 44px; border: 2px solid #fff; background: #ffcc33; color: #111; font-size: 26px; font-weight: 900; font-style: italic; cursor: pointer; }
+
+      /* --- ARENA CONTROLS --- */
+      #arenaControls {
+        display: none !important; position: fixed; top: 0; left: 0; width: 320px; height: 100vh; overflow-y: auto; padding: 20px 16px; background: rgba(10, 14, 24, 0.98); color: #8fa0bd; z-index: 11; font-size: 13px; font-family: monospace; border-right: 1px solid rgba(255,255,255,0.1); text-transform: none;
+      }
+      #arenaControls b { display: block; margin: 14px 0 6px; color: #fff; font-size: 14px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px; }
+      #arenaControls label { display: grid; grid-template-columns: 80px 1fr 45px; gap: 8px; align-items: center; margin: 8px 0; }
+      #arenaControls input, #arenaControls select, #arenaControls textarea { width: 100%; background: #171e2e; border: 1px solid #2d3950; color: #fff; padding: 4px; font-family: monospace; }
+      #arenaControls span { text-align: right; color: #ffd86b; }
+      .buttonRow { display: flex; gap: 6px; margin: 10px 0; }
+      .buttonRow button { flex: 1; border: 1px solid #405373; background: #1f293d; color: white; padding: 6px 8px; cursor: pointer; font-family: monospace; }
+      #arenaControls hr { border: 0; border-top: 1px dashed rgba(255,255,255,0.1); margin: 16px 0; }
+    </style>
+  </head>
+  <body>
+    <div id="boot">
+      <div class="bootCard">
+        <h1 class="gameTitle">Kombat<span>TEKKEN STYLE SIDE FIGHT VIEW</span></h1>
+
+        <div class="loaderWrap" id="loaderWrap" aria-hidden="true">
+          <svg viewBox="0 0 100 100">
+            <defs>
+              <linearGradient id="bootGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#ffffff" /><stop offset="45%" stop-color="#ffd86b" /><stop offset="100%" stop-color="#ffb300" />
+              </linearGradient>
+            </defs>
+            <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="3"></circle>
+            <g class="spinRing">
+              <circle class="dashRing" cx="50" cy="50" r="44" fill="none" stroke="url(#bootGrad)" stroke-width="3" stroke-linecap="round"></circle>
+            </g>
+          </svg>
+        </div>
+
+        <div id="bootMessage">Loading arena and fighters...</div>
+        <div id="bootMessage">this may take a little while...</div>
+        <button id="playBtn">PLAY</button>
+
+        <div id="arenaSelectors">
+          <button class="arenaBtn" data-arena="arena.glb">Arena</button>
+          <button class="arenaBtn" data-arena="arena2.glb">Arena 2</button>
+        </div>
+
+        <button id="creditsBtn" type="button" onclick="document.getElementById('creditsModal').showModal()">Credits</button>
+      </div>
+
+      <div id="help">
+        <b>P1 Combat Controls</b><br/>
+        A / D — Move Left / Right | W — Jump | S — Block/Crouch<br/>
+        Q / Z — Light Punch | E / C — Light Kick | X — Heavy Attack
+      </div>
+    </div>
+
+    <dialog id="creditsModal">
+      <div class="creditsHead">
+        <h2>Credits</h2>
+        <button class="closeCredits" type="button" onclick="document.getElementById('creditsModal').close()">✕</button>
+      </div>
+      <div class="creditsList">
+        <p><strong>Tekken Style JS Fighter</strong></p>
+        <p>Built with Three.js</p>
+        <p>Fighter models, animations, and arena assets from public domain sources.</p>
+        <p>Sound effects from free sound libraries.</p>
+        <p>Special thanks to the open-source community.</p>
+      </div>
+    </dialog>
+
+    <div id="hud">
+      <div class="barWrap"><span>P1 LEFT</span><div class="bar"><div id="p1Health" class="fill"></div></div></div>
+      <div id="roundText">ROUND 1</div>
+      <div class="barWrap right"><span>AI RIGHT</span><div class="bar"><div id="p2Health" class="fill"></div></div></div>
+      <div class="roundIndicators" id="p1Indicators"><span class="roundDot"></span><span class="roundDot"></span></div>
+      <div></div>
+      <div class="roundIndicators" id="p2Indicators"><span class="roundDot"></span><span class="roundDot"></span></div>
+    </div>
+
+    <div id="matchWinnerText"></div>
+    <div id="countdownText"></div>
+    <button id="replayBtn" style="display:none">Play Again</button>
+
+    <div id="arenaControls">
+      <b>Arena GLB Transform</b>
+      <label>Arena <select id="arenaSelect">
+        <option value="arena.glb">Arena Default</option>
+        <option value="arena1.glb">Arena 1</option>
+        <option value="arena2.glb">Arena 2</option>
+        <option value="arena3.glb">Arena 3</option>
+      </select></label>
+      <label>Upload <input id="arenaUpload" type="file" accept=".glb,.gltf,.fbx"></label>
+      <div class="buttonRow"><button id="gizmoTranslate">Move</button><button id="gizmoRotate">Rotate</button><button id="gizmoScale">Scale</button></div>
+      <label>Orbit <input id="orbitMode" type="checkbox"><span>cam</span></label>
+      <div class="buttonRow"><button id="resetCamera" type="button">Reset Camera</button></div>
+      <label>Scale <input id="arenaScale" type="range" min="0.001" max="2000" step="0.001" value="32.503"><span id="arenaScaleValue">32.503</span></label>
+      <label>Pos X <input id="arenaX" type="range" min="-1000" max="1000" step="0.01" value="-0.12"><span id="arenaXValue">-0.12</span></label>
+      <label>Pos Y <input id="arenaY" type="range" min="-1000" max="1000" step="0.01" value="-5.82"><span id="arenaYValue">-5.82</span></label>
+      <label>Pos Z <input id="arenaZ" type="range" min="-1000" max="1000" step="0.01" value="-2.61"><span id="arenaZValue">-2.61</span></label>
+      <label>Rot X <input id="arenaRotX" type="range" min="-180" max="180" step="0.1" value="0"><span id="arenaRotXValue">0.0</span></label>
+      <label>Rot Y <input id="arenaRotY" type="range" min="-180" max="180" step="0.1" value="133.2"><span id="arenaRotYValue">133.2</span></label>
+      <label>Rot Z <input id="arenaRotZ" type="range" min="-180" max="180" step="0.1" value="0"><span id="arenaRotZValue">0.0</span></label>
+      <hr />
+      <b>Initial Player Positions</b>
+      <label>P1 X <input id="p1StartX" type="range" min="-100" max="100" step="0.01" value="-2.6"><span id="p1StartXValue">-2.60</span></label>
+      <label>P1 Y <input id="p1StartY" type="range" min="-100" max="100" step="0.01" value="0"><span id="p1StartYValue">0.00</span></label>
+      <label>P1 Z <input id="p1StartZ" type="range" min="-100" max="100" step="0.01" value="0"><span id="p1StartZValue">0.00</span></label>
+      <label>AI X <input id="p2StartX" type="range" min="-100" max="100" step="0.01" value="2.6"><span id="p2StartXValue">2.60</span></label>
+      <label>AI Y <input id="p2StartY" type="range" min="-100" max="100" step="0.01" value="0"><span id="p2StartYValue">0.00</span></label>
+      <label>AI Z <input id="p2StartZ" type="range" min="-100" max="100" step="0.01" value="0"><span id="p2StartZValue">0.00</span></label>
+      <hr />
+      <b>Arena Boundary</b>
+      <label>Show <input id="showBoundary" type="checkbox" checked></label>
+      <label>Center X <input id="boundaryX" type="range" min="-20" max="20" step="0.01" value="0"><span id="boundaryXValue">0.00</span></label>
+      <label>Radius <input id="boundaryRadius" type="range" min="1" max="20" step="0.01" value="7"><span id="boundaryRadiusValue">7.00</span></label>
+      <hr />
+      <b>Background Image</b>
+      <input id="backgroundImage" type="file" accept="image/*" />
+      <label>Path <input id="backgroundPath" type="text" value="/assets/arena/background.jpg"><button id="loadBackgroundPath" type="button">Load</button></label>
+      <hr />
+      <div id="bgModelSection" style="display:none">
+        <b>Background GLB Model</b>
+        <label>Upload <input id="bgModelUpload" type="file" accept=".glb,.gltf"></label>
+        <label>Scale <input id="bgModelScale" type="range" min="0.001" max="200" step="0.001" value="95.031"><span id="bgModelScaleValue">95.031</span></label>
+        <label>Pos X <input id="bgModelX" type="range" min="-100" max="100" step="0.01" value="-27.87"><span id="bgModelXValue">-27.87</span></label>
+        <label>Pos Y <input id="bgModelY" type="range" min="-100" max="100" step="0.01" value="-1.63"><span id="bgModelYValue">-1.63</span></label>
+        <label>Pos Z <input id="bgModelZ" type="range" min="-100" max="100" step="0.01" value="-41.67"><span id="bgModelZValue">-41.67</span></label>
+        <label>Rot X <input id="bgModelRotX" type="range" min="-180" max="180" step="0.1" value="15.1"><span id="bgModelRotXValue">15.1</span></label>
+        <label>Rot Y <input id="bgModelRotY" type="range" min="-180" max="180" step="0.1" value="45.1"><span id="bgModelRotYValue">45.1</span></label>
+        <label>Rot Z <input id="bgModelRotZ" type="range" min="-180" max="180" step="0.1" value="5.1"><span id="bgModelRotZValue">5.1</span></label>
+      </div>
+      <hr />
+      <b>Camera Config</b>
+      <div class="buttonRow"><button id="exportCameraConfig">Show</button><button id="copyCameraConfig">Copy</button></div>
+      <textarea id="cameraConfigOutput" rows="4"></textarea>
+      <hr />
+      <b>Attack Timing</b>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <div style="background:#1a2332; padding:8px;"><b style="color:#4da6ff">Punch</b>
+          <label>Startup <input id="punchStartup" type="range" min="0.01" max="0.3" step="0.005" value="0.035"><span id="punchStartupValue">0.035</span></label>
+          <label>Active <input id="punchActive" type="range" min="0.02" max="0.4" step="0.005" value="0.10"><span id="punchActiveValue">0.10</span></label>
+          <label>Damage <input id="punchDamage" type="range" min="1" max="30" step="1" value="7"><span id="punchDamageValue">7</span></label>
+        </div>
+        <div style="background:#1a2332; padding:8px;"><b style="color:#ff6b6b">Kick</b>
+          <label>Startup <input id="kickStartup" type="range" min="0.05" max="0.4" step="0.005" value="0.14"><span id="kickStartupValue">0.14</span></label>
+          <label>Active <input id="kickActive" type="range" min="0.05" max="0.5" step="0.005" value="0.20"><span id="kickActiveValue">0.20</span></label>
+          <label>Damage <input id="kickDamage" type="range" min="1" max="40" step="1" value="12"><span id="kickDamageValue">12</span></label>
+        </div>
+        <div style="background:#1a2332; padding:8px;"><b style="color:#ffd93d">Heavy</b>
+          <label>Startup <input id="heavyStartup" type="range" min="0.1" max="0.5" step="0.005" value="0.20"><span id="heavyStartupValue">0.20</span></label>
+          <label>Active <input id="heavyActive" type="range" min="0.05" max="0.6" step="0.005" value="0.24"><span id="heavyActiveValue">0.24</span></label>
+          <label>Damage <input id="heavyDamage" type="range" min="1" max="50" step="1" value="16"><span id="heavyDamageValue">16</span></label>
+        </div>
+      </div>
+      <textarea id="attackTimingOutput" rows="4"></textarea>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
 </html>

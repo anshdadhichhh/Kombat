@@ -3,7 +3,8 @@ import { ATTACKS, DEFAULT_ANIMATION_MAP, ANIMATION_SPEEDS } from './animationMap
 import { makeFallbackFighter, normalizeFbxObject } from './assetLoader.js';
 
 const STATE = {
-  IDLE: 'idle', WALK: 'walk', JUMP: 'jump', CROUCH: 'crouch', BLOCK: 'block', ATTACK: 'attack', HIT: 'hit', KO: 'ko'
+  IDLE: 'idle', WALK: 'walk', JUMP: 'jump',  JUMP_ATTACK: 'jump_attack',
+ CROUCH: 'crouch', BLOCK: 'block', ATTACK: 'attack', HIT: 'hit', KO: 'ko'
 };
 
 export class Fighter {
@@ -206,13 +207,13 @@ export class Fighter {
       return;
     }
 
-    if (this.state === STATE.ATTACK) {
-      this.updateAttack(opponent, arena);
-      this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
-      this.integrate(dt, arena, opponent);
-      this.mixer?.update(dt);
-      return;
-    }
+if (this.state === STATE.ATTACK || this.state === STATE.JUMP_ATTACK) {
+  this.updateAttack(opponent, arena);
+  this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
+  this.integrate(dt, arena, opponent);
+  this.mixer?.update(dt);
+  return;
+}
 
     const left = input.isDown(this.bindings.left);
     const right = input.isDown(this.bindings.right);
@@ -220,6 +221,10 @@ export class Fighter {
     const punch = input.wasPressed(this.bindings.punch);
     const kick = input.wasPressed(this.bindings.kick);
     const heavy = input.wasPressed(this.bindings.heavy);
+    if (heavy) {
+      this.startAttack('heavy');
+      return;
+    }
 
     if (punch) this.startAttack('punch');
     else if (kick) this.startAttack('kick');
@@ -280,20 +285,31 @@ if (this.state !== STATE.WALK || this.currentActionName !== animName) {
     }
   }
 
-  startAttack(kind) {
-    if (this.health <= 0) return;
-    this.attackKind = kind;
-    this.attackHasHit = false;
-    this.attackStartX = this.group.position.x;
-    this.attackMotionApplied = 0;
-    this.attackRootMotion = null;
+startAttack(kind) {
+  if (this.health <= 0) return;
 
-    this.velocity.x = 0; // Kill horizontal velocity immediately for crisp attack start
-    this.setState(STATE.ATTACK);
-    if (this.play(kind, 0.025, false, true)) {
-      this.attackRootMotion = this.currentAction?.getClip()?.userData?.rootMotion || null;
+  this.attackKind = kind;
+  this.attackHasHit = false;
+  this.attackStartX = this.group.position.x;
+  this.attackMotionApplied = 0;
+  this.attackRootMotion = null;
+
+  this.velocity.x = 0;
+
+  if (kind === 'heavy') {
+    this.setState(STATE.JUMP_ATTACK);
+    if (this.isGrounded) {
+      this.velocity.y = this.jumpVelocity * 0.8;
+      this.isGrounded = false;
     }
+  } else {
+    this.setState(STATE.ATTACK);
   }
+
+  if (this.play(kind, 0.025, false, true)) {
+    this.attackRootMotion = this.currentAction?.getClip()?.userData?.rootMotion || null;
+  }
+}
 
   updateAttack(opponent, arena) {
     const atk = ATTACKS[this.attackKind];
@@ -338,28 +354,36 @@ if (this.state !== STATE.WALK || this.currentActionName !== animName) {
     }
   }
 
-  applyAttackMotion(atk, t, arena) {
-    const total = Math.max(0.001, atk.startup + atk.active + atk.recovery);
-    const progress = t === Infinity ? 1 : THREE.MathUtils.clamp(t / total, 0, 1);
-    const lungeDistance = Math.max(0, atk.lunge ?? 0);
-    let targetMotion = 0;
+applyAttackMotion(atk, t, arena) {
+  const total = Math.max(0.001, atk.startup + atk.active + atk.recovery);
+  const progress = t === Infinity ? 1 : THREE.MathUtils.clamp(t / total, 0, 1);
+  const lungeDistance = Math.max(0, atk.lunge ?? 0);
 
-    if (this.attackRootMotion?.distance > 0 && this.attackRootMotion?.sample) {
-      const clipDuration = this.currentAction?.getClip()?.duration || total;
-      const clipTime = clipDuration * progress;
-      targetMotion = (this.attackRootMotion.sample(clipTime) / this.attackRootMotion.distance) * lungeDistance;
-    } else {
-      targetMotion = THREE.MathUtils.smootherstep(progress, 0, 1) * lungeDistance;
-    }
+  let targetMotion = 0;
 
-    targetMotion = THREE.MathUtils.clamp(targetMotion, 0, lungeDistance);
-    const delta = targetMotion - this.attackMotionApplied;
-    if (Math.abs(delta) < 0.0001) return;
-
-    this.group.position.x += delta * this.facing;
-    this.group.position.x = THREE.MathUtils.clamp(this.group.position.x, -arena.halfWidth, arena.halfWidth);
-    this.attackMotionApplied = Math.abs(this.group.position.x - this.attackStartX);
+  if (this.attackRootMotion?.distance > 0 && this.attackRootMotion?.sample) {
+    const clipDuration = this.currentAction?.getClip()?.duration || total;
+    const clipTime = clipDuration * progress;
+    targetMotion = (this.attackRootMotion.sample(clipTime) / this.attackRootMotion.distance) * lungeDistance;
+  } else {
+    targetMotion = THREE.MathUtils.smootherstep(progress, 0, 1) * lungeDistance;
   }
+
+  targetMotion = THREE.MathUtils.clamp(targetMotion, 0, lungeDistance);
+  const desiredX = this.attackStartX + (targetMotion * this.facing);
+  const delta = desiredX - this.group.position.x;
+
+  if (Math.abs(delta) < 0.0001) return;
+
+  const before = this.group.position.x;
+  this.group.position.x = THREE.MathUtils.clamp(
+    this.group.position.x + delta,
+    -arena.halfWidth,
+    arena.halfWidth
+  );
+
+  this.attackMotionApplied = this.group.position.x - this.attackStartX;
+}
 
   receiveHit(atk, attacker) {
     if (this.health <= 0) return { blocked: false, ko: true };

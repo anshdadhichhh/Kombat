@@ -82,11 +82,12 @@ this.setupAttackTimingLabelUpdates();
 window.addEventListener('resize', () => this.onResize());
     this.setupReplayButton();
     this.setupPlayButton();
+    this.setupCreditsModal();
+    this.setupArenaButtons();
     this.setupSliders();
     this.setupTransformButtons();
     this.setupBackgroundControls();
     this.setupArenaUpload();
-    this.setupArenaSelector();
     this.setupBgModelControls();
   }
 
@@ -275,7 +276,7 @@ window.addEventListener('resize', () => this.onResize());
   }
 
   async loadArenaFromFolder() {
-    const files = ['arena.glb', 'arena1.glb', 'arena2.glb', 'arena3.glb'];
+    const files = ['arena.glb', 'arena2.glb'];
     let first = null;
     for (const file of files) {
       try {
@@ -392,6 +393,18 @@ applyArenaDefaultForFile(file) {
     this.setInput('arenaRotY', c.ry);
     this.setInput('arenaRotZ', c.rz);
   }
+
+  const boundaryDefaults = {
+    'arena.glb': { boundaryX: 0.82, boundaryRadius: 19.22 },
+    'arena2.glb': { boundaryX: -0.82, boundaryRadius: 14.27 },
+  };
+  const bd = boundaryDefaults[file];
+  if (bd) {
+    this.setInput('boundaryX', bd.boundaryX);
+    this.setInput('boundaryRadius', bd.boundaryRadius);
+    this.updateBoundaryCircle();
+  }
+  
   this.applyArenaSliders();
 }
 applyDefaultCameraConfig() {
@@ -519,9 +532,16 @@ applyDefaultCameraConfig() {
     this.p2.faceOpponent(this.p1);
   }
 
-  setupArenaSelector() {
-    const sel = document.getElementById('arenaSelect');
-    if (sel) sel.addEventListener('change', () => this.switchArena(sel.value));
+  setupArenaButtons() {
+    document.querySelectorAll('.arenaBtn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const file = btn.dataset.arena;
+        if (!file || file === this.currentArenaFile) return;
+        document.querySelectorAll('.arenaBtn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.switchArena(file);
+      });
+    });
   }
 
   async switchArena(fileName) {
@@ -707,6 +727,14 @@ applyDefaultCameraConfig() {
     if (btn) btn.addEventListener('click', () => this.playAgain());
   }
   setupPlayButton() { const btn = document.getElementById('playBtn'); if (btn) btn.addEventListener('click', () => this.startFight()); }
+  setupCreditsModal() {
+    const modal = document.getElementById('creditsModal');
+    const openBtn = document.getElementById('creditsBtn');
+    const closeBtn = document.querySelector('.closeCredits');
+    if (modal && openBtn) openBtn.addEventListener('click', () => modal.showModal());
+    if (modal && closeBtn) closeBtn.addEventListener('click', () => modal.close());
+    if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) modal.close(); });
+  }
   startFight() { if (!this.assetsReady) return; this.fightStarted = true; this.hideBoot(); this.clock.getDelta(); this.countdownActive = true; this.countdownTimer = 3.0; this.lastCountdownDisplay = -1; }
   handleCountdown(dt) {
     const el = document.getElementById('countdownText');
@@ -731,7 +759,19 @@ applyDefaultCameraConfig() {
       this.countdownActive = false;
     }
   }
-  showBoot(message, showPlay) { const boot = document.getElementById('boot'); const msg = document.getElementById('bootMessage'); const btn = document.getElementById('playBtn'); if (!boot) return; boot.style.display = 'grid'; if (msg) msg.textContent = message; if (btn) btn.style.display = showPlay ? 'inline-block' : 'none'; }
+  showBoot(message, showPlay) {
+    const boot = document.getElementById('boot');
+    const msg = document.getElementById('bootMessage');
+    const btn = document.getElementById('playBtn');
+    const loader = document.getElementById('loaderWrap');
+    const arenaBtns = document.getElementById('arenaSelectors');
+    if (!boot) return;
+    boot.style.display = 'grid';
+    if (msg) msg.textContent = message;
+    if (btn) btn.style.display = showPlay ? 'inline-block' : 'none';
+    if (loader) loader.style.display = showPlay ? 'none' : 'block';
+    if (arenaBtns) arenaBtns.style.display = showPlay ? 'flex' : 'flex';
+  }
   hideBoot() { const boot = document.getElementById('boot'); if (boot) boot.style.display = 'none'; }
 
   animate() {
