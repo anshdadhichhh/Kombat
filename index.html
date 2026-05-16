@@ -68,6 +68,70 @@
       <b>Background Image</b>
       <input id="backgroundImage" type="file" accept="image/*" />
       <label>Path <input id="backgroundPath" type="text" value="/assets/arena/background.jpg"><button id="loadBackgroundPath" type="button">Load</button></label>
+
+
+<hr />
+<b>Camera Position Config</b>
+<div class="buttonRow">
+  <button id="exportCameraConfig" type="button">Show Camera</button>
+  <button id="copyCameraConfig" type="button">Copy Camera</button>
+</div>
+<div class="buttonRow">
+  <button id="saveCameraConfig" type="button">Save Camera Local</button>
+  <button id="loadCameraConfig" type="button">Load Camera Local</button>
+  <button id="applyCameraConfig" type="button">Apply Camera Text</button>
+</div>
+<textarea id="cameraConfigOutput" rows="8" placeholder="Orbit to your ideal view, then click Show/Copy to export camera position."></textarea>
+
+<hr />
+<b>Attack Timing Controls</b>
+<div style="display:flex; flex-direction:column; gap:14px; margin:8px 0;">
+  
+  <!-- PUNCH -->
+  <div style="background:#1a2332; padding:14px; border-radius:10px; border:1px solid #2d3a52;">
+    <b style="color:#4da6ff">Punch</b><br/>
+    <label>Startup <input id="punchStartup" type="range" min="0.01" max="0.30" step="0.005" value="0.035"><span id="punchStartupValue">0.035s</span></label><br/>
+    <label>Active <input id="punchActive" type="range" min="0.02" max="0.40" step="0.005" value="0.10"><span id="punchActiveValue">0.10s</span></label><br/>
+    <label>Recovery <input id="punchRecovery" type="range" min="0.02" max="0.50" step="0.005" value="0.075"><span id="punchRecoveryValue">0.075s</span></label><br/>
+    <label>Range <input id="punchRange" type="range" min="0.5" max="2.5" step="0.05" value="1.15"><span id="punchRangeValue">1.15</span></label><br/>
+    <label>Push <input id="punchPush" type="range" min="0" max="1.0" step="0.02" value="0.18"><span id="punchPushValue">0.18</span></label><br/>
+    <label>Damage <input id="punchDamage" type="range" min="1" max="30" step="1" value="7"><span id="punchDamageValue">7</span></label>
+  </div>
+  
+  <!-- KICK -->
+  <div style="background:#1a2332; padding:14px; border-radius:10px; border:1px solid #2d3a52;">
+    <b style="color:#ff6b6b">Kick</b><br/>
+    <label>Startup <input id="kickStartup" type="range" min="0.05" max="0.40" step="0.005" value="0.14"><span id="kickStartupValue">0.14s</span></label><br/>
+    <label>Active <input id="kickActive" type="range" min="0.05" max="0.50" step="0.005" value="0.20"><span id="kickActiveValue">0.20s</span></label><br/>
+    <label>Recovery <input id="kickRecovery" type="range" min="0.05" max="0.70" step="0.005" value="0.28"><span id="kickRecoveryValue">0.28s</span></label><br/>
+    <label>Range <input id="kickRange" type="range" min="0.5" max="3.0" step="0.05" value="1.65"><span id="kickRangeValue">1.65</span></label><br/>
+    <label>Push <input id="kickPush" type="range" min="0" max="1.5" step="0.02" value="0.30"><span id="kickPushValue">0.30</span></label><br/>
+    <label>Damage <input id="kickDamage" type="range" min="1" max="40" step="1" value="12"><span id="kickDamageValue">12</span></label>
+  </div>
+  
+  <!-- HEAVY -->
+  <div style="background:#1a2332; padding:14px; border-radius:10px; border:1px solid #2d3a52;">
+    <b style="color:#ffd93d">Heavy</b><br/>
+    <label>Startup <input id="heavyStartup" type="range" min="0.10" max="0.50" step="0.005" value="0.20"><span id="heavyStartupValue">0.20s</span></label><br/>
+    <label>Active <input id="heavyActive" type="range" min="0.05" max="0.60" step="0.005" value="0.24"><span id="heavyActiveValue">0.24s</span></label><br/>
+    <label>Recovery <input id="heavyRecovery" type="range" min="0.10" max="0.80" step="0.005" value="0.40"><span id="heavyRecoveryValue">0.40s</span></label><br/>
+    <label>Range <input id="heavyRange" type="range" min="0.5" max="3.0" step="0.05" value="1.45"><span id="heavyRangeValue">1.45</span></label><br/>
+    <label>Push <input id="heavyPush" type="range" min="0" max="2.0" step="0.02" value="0.40"><span id="heavyPushValue">0.40</span></label><br/>
+    <label>Damage <input id="heavyDamage" type="range" min="1" max="50" step="1" value="16"><span id="heavyDamageValue">16</span></label>
+  </div>
+</div>
+
+<div class="buttonRow">
+  <button id="exportAttackTiming" type="button">Show Timing</button>
+  <button id="copyAttackTiming" type="button">Copy Timing</button>
+</div>
+<div class="buttonRow">
+  <button id="saveAttackTiming" type="button">Save Timing Local</button>
+  <button id="loadAttackTiming" type="button">Load Timing Local</button>
+  <button id="applyAttackTiming" type="button">Apply Timing Text</button>
+</div>
+<textarea id="attackTimingOutput" rows="10" placeholder="Adjust sliders to tune attack feel, then Copy to export frame data."></textarea>
+
     </div>
 
     <div id="help">

@@ -2,10 +2,12 @@ import * as THREE from 'three';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { AssetLoader } from './assetLoader.js';
+import { setupArenaConfigTools, setupCameraConfigTools, applyCameraConfig, setupAttackTimingTools } from './configtools.js';
 import { Fighter } from './fighter.js';
 import { KeyboardInput, P1_BINDINGS, P2_BINDINGS } from './input.js';
 import { AIInput } from './aiInput.js';
 import { VFXSystem } from './vfx.js';
+
 
 const NEUTRAL_INPUT = { isDown: () => false, wasPressed: () => false, endFrame: () => {} };
 
@@ -49,9 +51,12 @@ export class FightingGame {
     this.container.appendChild(this.renderer.domElement);
 
     this.vfx = new VFXSystem(this.scene, this.camera);
-    this.setupOrbitControls();
-    this.setupTransformControls();
-    window.addEventListener('resize', () => this.onResize());
+this.setupOrbitControls();
+this.setupTransformControls();
+setupCameraConfigTools(this.camera, this.orbitControls); 
+setupAttackTimingTools();
+this.setupAttackTimingLabelUpdates();
+window.addEventListener('resize', () => this.onResize());
     this.setupReplayButton();
     this.setupPlayButton();
     this.setupSliders();
@@ -68,8 +73,11 @@ export class FightingGame {
     this.animate();
     try {
       await Promise.all([this.loadArenaFromFolder(), this.loadFighters()]);
+      this.updateAttackTimingFromUI();
       this.assetsReady = true;
       this.showBoot('ALL ASSETS LOADED. Press PLAY to start.', true);
+      this.applyDefaultCameraConfig(); 
+
       console.log('ALL ASSETS LOADED: arena from public/assets/arena + fighters + animations.');
     } catch (err) {
       console.error('Game asset load failed:', err);
@@ -161,11 +169,43 @@ export class FightingGame {
     });
     const resetCam = document.getElementById('resetCamera');
     if (resetCam) resetCam.addEventListener('click', () => {
-      this.camera.position.set(0, 3.8, 12.5);
-      this.orbitControls.target.set(0, 1.25, 0);
-      this.orbitControls.update();
-    });
+  this.applyDefaultCameraConfig(); 
+});
   }
+
+  updateAttackTimingFromUI() {
+  
+  
+  if (typeof ATTACKS !== 'undefined') {
+    ATTACKS.punch = {
+      ...ATTACKS.punch,
+      startup: this.num('punchStartup', 0.035),
+      active: this.num('punchActive', 0.10),
+      recovery: this.num('punchRecovery', 0.075),
+      range: this.num('punchRange', 1.15),
+      push: this.num('punchPush', 0.18),
+      damage: this.num('punchDamage', 7)
+    };
+    ATTACKS.kick = {
+      ...ATTACKS.kick,
+      startup: this.num('kickStartup', 0.14),
+      active: this.num('kickActive', 0.20),
+      recovery: this.num('kickRecovery', 0.28),
+      range: this.num('kickRange', 1.65),
+      push: this.num('kickPush', 0.30),
+      damage: this.num('kickDamage', 12)
+    };
+    ATTACKS.heavy = {
+      ...ATTACKS.heavy,
+      startup: this.num('heavyStartup', 0.20),
+      active: this.num('heavyActive', 0.24),
+      recovery: this.num('heavyRecovery', 0.40),
+      range: this.num('heavyRange', 1.45),
+      push: this.num('heavyPush', 0.40),
+      damage: this.num('heavyDamage', 16)
+    };
+  }
+}
 
   setupArenaUpload() {
     const input = document.getElementById('arenaUpload');
@@ -279,23 +319,66 @@ export class FightingGame {
     return floor;
   }
 
-  applyArenaDefaultForFile(file) {
-    const configs = {
-      'arena.glb': { scale: 32.503, x: -0.12, y: -5.82, z: -2.61, rx: 0, ry: 133.2, rz: 0 },
-      'arena2.glb': { scale: 816.856, x: 155.74, y: -89.31, z: -61.37, rx: 0, ry: 133.2, rz: 0 },
-    };
-    const c = configs[file];
-    if (c) {
-      this.setInput('arenaScale', c.scale);
-      this.setInput('arenaX', c.x);
-      this.setInput('arenaY', c.y);
-      this.setInput('arenaZ', c.z);
-      this.setInput('arenaRotX', c.rx);
-      this.setInput('arenaRotY', c.ry);
-      this.setInput('arenaRotZ', c.rz);
-    }
-    this.applyArenaSliders();
+applyArenaDefaultForFile(file) {
+  
+  const configs = {
+    'arena.glb': { 
+      scale: 60.925, 
+      x: 2.46,    
+      y: -11.11,   
+      z: -5.21 ,  
+      rx: 0, 
+      ry: 133.2, 
+      rz: 0 
+    },
+
+    'arena2.glb': { 
+      scale: 816.856, 
+      x: 155.74,   
+      y: -89.26,   
+      z: -61.37,   
+      rx: 0, 
+      ry: 133.2, 
+      rz: 0 
+    },
+    
+    'arena1.glb': { scale: 32.503, x: -0.12, y: -5.82, z: -2.61, rx: 0, ry: 133.2, rz: 0 },
+    'arena3.glb': { scale: 32.503, x: -0.12, y: -5.82, z: -2.61, rx: 0, ry: 133.2, rz: 0 },
+  };
+  
+  const c = configs[file];
+  if (c) {
+    this.setInput('arenaScale', c.scale);
+    this.setInput('arenaX', c.x);
+    this.setInput('arenaY', c.y);
+    this.setInput('arenaZ', c.z);
+    this.setInput('arenaRotX', c.rx);
+    this.setInput('arenaRotY', c.ry);
+    this.setInput('arenaRotZ', c.rz);
   }
+  this.applyArenaSliders();
+}
+applyDefaultCameraConfig() {
+  
+  const defaultCam = {
+    camera: {
+      position: { 
+        x: -0.5721527370856918,   
+        y: 0.9597972147533198,    
+        z: 9.56584352411778   
+      },
+      fov: 42
+    },
+    controls: {
+      target: { x: 0, y: 1.25, z: 0 },  
+      distance: 9.587332201349113,     
+      polarAngle: 1.6010703501795667,
+      azimuthalAngle: -0.05974087991286296,         
+    }
+  };
+  
+  applyCameraConfig(defaultCam, this.camera, this.orbitControls);
+}
 
   setupSliders() {
     ['arenaScale','arenaX','arenaY','arenaZ','arenaRotX','arenaRotY','arenaRotZ','p1StartX','p1StartY','p1StartZ','p2StartX','p2StartY','p2StartZ'].forEach((id) => {
@@ -360,6 +443,36 @@ export class FightingGame {
     this.p2.faceOpponent(this.p1);
   }
 
+  setupAttackTimingLabelUpdates() {
+  
+  const updateLabel = (id, suffix = 's') => {
+    const el = document.getElementById(id);
+    const label = document.getElementById(id + 'Value');
+    if (el && label) {
+      el.addEventListener('input', () => {
+        label.textContent = parseFloat(el.value).toFixed(3) + suffix;
+      });
+    }
+  };
+  
+  
+  ['punchStartup','punchActive','punchRecovery','kickStartup','kickActive','kickRecovery','heavyStartup','heavyActive','heavyRecovery'].forEach(id => updateLabel(id, 's'));
+  
+  
+  ['punchRange','punchPush','kickRange','kickPush','heavyRange','heavyPush'].forEach(id => updateLabel(id, ''));
+  
+  
+  ['punchDamage','kickDamage','heavyDamage'].forEach(id => {
+    const el = document.getElementById(id);
+    const label = document.getElementById(id + 'Value');
+    if (el && label) {
+      el.addEventListener('input', () => {
+        label.textContent = Math.round(parseFloat(el.value));
+      });
+    }
+  });
+}
+
   async loadFighters() {
     this.p1 = new Fighter({ id: 'P1-LEFT', color: 0x2f7dff, startX: -2.6, modelUrl: '/assets/characters/player1/character.fbx', animationBaseUrl: '/assets/characters/player1', bindings: P1_BINDINGS, assetLoader: this.loader, vfx: this.vfx });
     this.p2 = new Fighter({ id: 'AI-RIGHT', color: 0xff374f, startX: 2.6, modelUrl: '/assets/characters/player2/character.fbx', animationBaseUrl: '/assets/characters/player2', bindings: P2_BINDINGS, assetLoader: this.loader, isAI: true, vfx: this.vfx });
@@ -387,6 +500,7 @@ export class FightingGame {
     this.loadedArena = obj;
     this.currentArenaFile = fileName;
     this.applyArenaDefaultForFile(fileName);
+    this.applyDefaultCameraConfig(); 
   }
 
   setupReplayButton() { const btn = document.getElementById('replayBtn'); if (btn) btn.addEventListener('click', () => this.resetRound()); }
@@ -428,7 +542,7 @@ export class FightingGame {
   updateHud() {
     document.getElementById('p1Health').style.width = `${this.p1.health}%`;
     document.getElementById('p2Health').style.width = `${this.p2.health}%`;
-    // Sync labels when fighters cross positions so user always knows who is who
+    
     const p1OnLeft = this.p1.group.position.x < this.p2.group.position.x;
     const p1Label = document.querySelector('.barWrap:first-child span');
     const p2Label = document.querySelector('.barWrap.right span');

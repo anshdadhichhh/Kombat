@@ -100,7 +100,11 @@ export class Fighter {
         // FIX: Do NOT clamp attack/hit/ko animations to their last frame —
         // that causes the "stuck in place" look when the animation ends.
         // Instead let them fall through to idle via the state machine.
-        action.clampWhenFinished = false;
+        if (name === 'ko') {
+          action.clampWhenFinished = true;
+        } else {
+          action.clampWhenFinished = false;
+        }
         loadedActions.push(action);
         console.log(`[${this.id}] Loaded animation ${name}: ${file}`);
       } catch (err) {
@@ -144,6 +148,9 @@ export class Fighter {
       next.setEffectiveWeight(1);
       next.setEffectiveTimeScale(ANIMATION_SPEEDS[name] ?? 1);
       next.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
+      if (!loop) {
+        next.repetitions = 1;
+      }
       next.fadeIn(fade).play();
       if (this.currentAction && this.currentAction !== next) this.currentAction.fadeOut(fade);
       this.currentAction = next;
@@ -171,6 +178,16 @@ export class Fighter {
       this.velocity.x = THREE.MathUtils.damp(this.velocity.x, 0, this.friction, dt);
       this.integrate(dt, arena, opponent);
       this.mixer?.update(dt);
+
+      // Freeze on final KO frame
+      if (
+        this.currentActionName === 'ko' &&
+        this.currentAction &&
+        this.currentAction.time >= this.currentAction.getClip().duration
+      ) {
+        this.currentAction.paused = true;
+      }
+      
       return;
     }
 
