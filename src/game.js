@@ -608,6 +608,9 @@ applyDefaultCameraConfig() {
       ['punch', `${base}/punch.mp3`],
       ['punch2', `${base}/punch (2).mp3`],
       ['punch3', `${base}/punch (3).mp3`],
+      ['kick', `${base}/kick.mp3`],
+      ['whiff', `${base}/play this sound when player doesnt hit anything but punches or kicks.wav`],
+      ['jumpAttackEnd', `${base}/sound to play at the end of jump attack animation.wav`],
     ];
     list.forEach(([name, url]) => this.sound.load(name, url));
   }
@@ -675,7 +678,7 @@ applyDefaultCameraConfig() {
           }
           this.roundTransition.phase = 'starting';
           this.roundTransition.timer = 0;
-          roundTextEl.textContent = `ROUND ${this.currentRound}`;
+          roundTextEl.textContent = `Starting Round ${this.currentRound}`;
           if (this.currentRound === 2) this.sound.play('round2', 0.7);
         }
       }

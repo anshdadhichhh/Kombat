@@ -23,7 +23,8 @@ export class Fighter {
     this.group.position.set(startX, 0, 0);
     this.velocity = new THREE.Vector3();
     this.facing = startX < 0 ? 1 : -1;
-
+    this.facingYawOffset = Math.PI / 2;
+    
     this.health = 100;
     this.state = STATE.IDLE;
     this.stateTime = 0;
@@ -164,6 +165,7 @@ export class Fighter {
   }
 
   update(dt, input, opponent, arena) {
+    dt = Math.min(dt, 1 / 30);
     if (this.hitStop > 0) {
       this.hitStop -= dt;
       this.mixer?.update(dt * 0.25);
@@ -245,12 +247,11 @@ export class Fighter {
         // FIX: Loop crouch/block so they don't freeze on last frame
         this.play(this.blocking ? 'block' : 'crouch', 0.08, true);
       } else if (move !== 0) {
-        const animName = Math.sign(move) === this.facing ? 'walkForward' : 'walkBack';
-        if (this.state !== STATE.WALK || this.currentActionName !== animName) {
-          this.setState(STATE.WALK);
-          // FIX: Loop walk animations — they should cycle smoothly
-          this.play(animName, 0.08, true, false);
-        }
+        const animName = move > 0 ? 'walkForward' : 'walkBack';
+if (this.state !== STATE.WALK || this.currentActionName !== animName) {
+  this.setState(STATE.WALK);
+  this.play(animName, 0.08, true, false);
+}
       } else if (this.state === STATE.WALK || this.state === STATE.JUMP) {
         // Returning from walk/jump — transition to idle
         if (this.isGrounded) {
@@ -315,17 +316,23 @@ export class Fighter {
         const frontZ = this.group.position.z + 0.65;
         const hitPoint = new THREE.Vector3((this.group.position.x + opponent.group.position.x) * 0.5, 1.35, frontZ);
         this.vfx?.spawnHit(hitPoint, new THREE.Vector3(this.facing, 0.15, 0.25), Boolean(hit?.blocked));
-        const hitSound = { punch: 'punch', kick: 'punch2', heavy: 'punch3' }[this.attackKind] || 'punch';
+        const hitSound = { punch: 'punch', kick: 'kick', heavy: 'punch3' }[this.attackKind] || 'punch';
         this.sound?.play(hitSound, 0.7);
       }
     }
 
     if (t >= atk.startup + atk.active + atk.recovery) {
       this.applyAttackMotion(atk, Infinity, arena);
+
+      if (!this.attackHasHit) {
+        this.sound?.play('whiff', 0.6);
+      }
+
+      if (this.attackKind === 'heavy') {
+        this.sound?.play('jumpAttackEnd', 0.6);
+      }
+
       this.attackKind = null;
-      // FIX: Keep the committed lunge position — don't snap back.
-      // The lunge target IS where the character now stands.
- 
       this.setState(STATE.IDLE);
       this.play('idle', 0.1);
     }
@@ -417,8 +424,5 @@ export class Fighter {
     return new THREE.Vector3(this.group.position.x, 0.05, this.group.position.z + 0.45);
   }
 
-  faceOpponent(opponent) {
-    this.facing = opponent.group.position.x >= this.group.position.x ? 1 : -1;
-    this.group.rotation.y = this.facing === 1 ? Math.PI / 2 : -Math.PI / 2;
-  }
+faceOpponent(opponent) { this.facing = opponent.group.position.x >= this.group.position.x ? 1 : -1; this.group.rotation.y = this.facing === 1 ? Math.PI / 2 : -Math.PI / 2; }
 }
