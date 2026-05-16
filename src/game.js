@@ -11,6 +11,9 @@ import { SoundManager } from './audio.js';
 
 
 const NEUTRAL_INPUT = { isDown: () => false, wasPressed: () => false, endFrame: () => {} };
+const CAM_DIR = new THREE.Vector3(-0.0597, -0.0302, 0.9978);
+const CAM_MIN_DIST = 9.59;
+const CAM_MAX_DIST = 30;
 
 export class FightingGame {
   constructor(container = document.body) {
@@ -47,6 +50,9 @@ export class FightingGame {
     // Background GLB model state
     this.bgModelRoot = null;
     this.bgModelObject = null;
+
+    // Arena boundary circle
+    this.boundaryCircle = null;
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x87a9c7);
@@ -98,6 +104,8 @@ window.addEventListener('resize', () => this.onResize());
       }
       this.loadSounds();
       this.updateAttackTimingFromUI();
+      this.createBoundaryCircle();
+      this.setupBoundaryControls();
       this.assetsReady = true;
       this.setBackgroundImage('/assets/backgrounds/bg.png');
       this.showBoot('ALL ASSETS LOADED. Press PLAY to start.', true);
@@ -602,6 +610,77 @@ applyDefaultCameraConfig() {
     if (this.bgModelRoot) this.bgModelRoot.visible = this.currentArenaFile !== 'arena2.glb';
   }
 
+  // ====== ARENA BOUNDARY CIRCLE ======
+
+  setupBoundaryControls() {
+    const checkbox = document.getElementById('showBoundary');
+    if (checkbox) checkbox.addEventListener('change', () => this.updateBoundaryVisibility());
+
+    ['boundaryX', 'boundaryRadius'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', () => this.updateBoundaryCircle());
+    });
+
+    this.updateBoundaryCircle();
+    this.updateBoundaryVisibility();
+  }
+
+  createBoundaryCircle() {
+    const segments = 64;
+    const pts = [];
+    for (let i = 0; i <= segments; i++) {
+      const theta = (i / segments) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.cos(theta), 0, Math.sin(theta)));
+    }
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const mat = new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.5 });
+    this.boundaryCircle = new THREE.LineLoop(geo, mat);
+    this.boundaryCircle.position.y = 0.05;
+    this.scene.add(this.boundaryCircle);
+    this.updateBoundaryCircle();
+    this.updateBoundaryVisibility();
+  }
+
+  updateBoundaryCircle() {
+    if (!this.boundaryCircle) return;
+    this.boundaryCircle.position.x = this.num('boundaryX', 0);
+    this.boundaryCircle.scale.setScalar(this.num('boundaryRadius', 7));
+    this.label('boundaryXValue', this.boundaryCircle.position.x.toFixed(2));
+    this.label('boundaryRadiusValue', this.num('boundaryRadius', 7).toFixed(2));
+  }
+
+  updateBoundaryVisibility() {
+    if (!this.boundaryCircle) return;
+    const show = document.getElementById('showBoundary');
+    this.boundaryCircle.visible = !show || show.checked;
+  }
+
+  clampToBoundary(fighter) {
+    if (!this.boundaryCircle || !this.boundaryCircle.visible) return;
+    const cx = this.boundaryCircle.position.x;
+    const r = this.boundaryCircle.scale.x;
+    if (r <= 0.01) return;
+    const dx = fighter.group.position.x - cx;
+    const dz = fighter.group.position.z - 0;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist > r) {
+      const s = r / dist;
+      fighter.group.position.x = cx + dx * s;
+      fighter.group.position.z = dz * s;
+    }
+  }
+
+  updateSmartCamera() {
+    const midX = (this.p1.group.position.x + this.p2.group.position.x) / 2;
+    const sep = Math.abs(this.p1.group.position.x - this.p2.group.position.x);
+    const lookTarget = new THREE.Vector3(midX, 1.25, 0);
+    const targetDist = THREE.MathUtils.clamp(Math.max(CAM_MIN_DIST, sep + 4.39), CAM_MIN_DIST, CAM_MAX_DIST);
+    const targetPos = lookTarget.clone().add(CAM_DIR.clone().multiplyScalar(targetDist));
+    this.camera.position.lerp(targetPos, 0.04);
+    this.camera.lookAt(lookTarget);
+    this.orbitControls.target.copy(lookTarget);
+  }
+
   // ====== SOUND SYSTEM ======
 
   loadSounds() {
@@ -677,6 +756,7 @@ applyDefaultCameraConfig() {
       this.p2.play('idle', 0.12);
       this.p1.mixer?.update(dt);
       this.p2.mixer?.update(dt);
+      this.updateSmartCamera();
       return;
     }
     this.p1.faceOpponent(this.p2);
@@ -694,7 +774,10 @@ applyDefaultCameraConfig() {
       try { this.p1.update(dt, NEUTRAL_INPUT, this.p2, this.arena); } catch (e) { console.error('P1 update error:', e); }
       try { this.p2.update(dt, NEUTRAL_INPUT, this.p1, this.arena); } catch (e) { console.error('P2 update error:', e); }
     }
+    this.clampToBoundary(this.p1);
+    this.clampToBoundary(this.p2);
     this.updateHud();
+    this.updateSmartCamera();
   }
 
   handleRoundTransition(dt) {
