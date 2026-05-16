@@ -36,5 +36,5 @@ export const ATTACKS = {
   // Very fast punch startup/recovery to match faster punch animation playback.
   punch: { damage: 7, startup: 0.035, active: 0.10, recovery: 0.075, range: 1.15, height: 'mid', push: 0.18 },
   kick:  { damage: 12, startup: 0.14, active: 0.20, recovery: 0.28, range: 1.65, height: 'mid', push: 0.30 },
-  heavy: { damage: 16, startup: 0.20, active: 0.24, recovery: 0.40, range: 1.45, height: 'mid', push: 0.40 }
+  heavy: { damage: 16, startup: 0.20, active: 0.24, recovery: 0.40, range: 1.45, height: 'mid', push: 0.40, lunge: 0.7 }
 };
