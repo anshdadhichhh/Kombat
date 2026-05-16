@@ -9,8 +9,8 @@
       #boot { position: fixed; inset: 0; background: #101827; color: #fff; display: grid; place-items: center; font: 16px system-ui, Arial; z-index: 9999; }
       #playBtn { display:none; margin-top:16px; padding:12px 32px; border-radius:999px; border:2px solid white; background:#ffcc33; font-weight:900; font-size:20px; cursor:pointer; }
     </style>
-    <script type="module" crossorigin src="/assets/index-QGO7Dk1M.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-DMkqSOYY.css">
+    <script type="module" crossorigin src="/assets/index-GCRmbAbk.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BG9O3KJh.css">
   </head>
   <body>
     <div id="boot"><div style="text-align:center"><div id="bootMessage">Loading arena and fighters...</div><button id="playBtn">PLAY</button></div></div>
@@ -19,9 +19,20 @@
       <div class="barWrap"><span>P1 LEFT</span><div class="bar"><div id="p1Health" class="fill"></div></div></div>
       <div id="roundText">ROUND 1</div>
       <div class="barWrap right"><span>AI RIGHT</span><div class="bar"><div id="p2Health" class="fill"></div></div></div>
+      <div class="roundIndicators" id="p1Indicators">
+        <span class="roundDot"></span>
+        <span class="roundDot"></span>
+      </div>
+      <div></div>
+      <div class="roundIndicators" id="p2Indicators">
+        <span class="roundDot"></span>
+        <span class="roundDot"></span>
+      </div>
     </div>
 
-    <button id="replayBtn">Replay</button>
+    <div id="matchWinnerText"></div>
+
+    <button id="replayBtn" style="display:none">Play Again</button>
 
     <div id="arenaControls">
       <b>Arena GLB Transform</b>
@@ -70,6 +81,82 @@
       <b>Background Image</b>
       <input id="backgroundImage" type="file" accept="image/*" />
       <label>Path <input id="backgroundPath" type="text" value="/assets/arena/background.jpg"><button id="loadBackgroundPath" type="button">Load</button></label>
+
+<hr />
+<div id="bgModelSection" style="display:none">
+  <b>Background GLB Model</b>
+  <label>Upload <input id="bgModelUpload" type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json"></label>
+  <label>Scale <input id="bgModelScale" type="range" min="0.001" max="200" step="0.001" value="1"><span id="bgModelScaleValue">1.000</span></label>
+  <label>Pos X <input id="bgModelX" type="range" min="-100" max="100" step="0.01" value="0"><span id="bgModelXValue">0.00</span></label>
+  <label>Pos Y <input id="bgModelY" type="range" min="-100" max="100" step="0.01" value="0"><span id="bgModelYValue">0.00</span></label>
+  <label>Pos Z <input id="bgModelZ" type="range" min="-100" max="100" step="0.01" value="0"><span id="bgModelZValue">0.00</span></label>
+  <label>Rot X <input id="bgModelRotX" type="range" min="-180" max="180" step="0.1" value="0"><span id="bgModelRotXValue">0.0</span></label>
+  <label>Rot Y <input id="bgModelRotY" type="range" min="-180" max="180" step="0.1" value="0"><span id="bgModelRotYValue">0.0</span></label>
+  <label>Rot Z <input id="bgModelRotZ" type="range" min="-180" max="180" step="0.1" value="0"><span id="bgModelRotZValue">0.0</span></label>
+</div>
+
+<hr />
+<b>Camera Position Config</b>
+<div class="buttonRow">
+  <button id="exportCameraConfig" type="button">Show Camera</button>
+  <button id="copyCameraConfig" type="button">Copy Camera</button>
+</div>
+<div class="buttonRow">
+  <button id="saveCameraConfig" type="button">Save Camera Local</button>
+  <button id="loadCameraConfig" type="button">Load Camera Local</button>
+  <button id="applyCameraConfig" type="button">Apply Camera Text</button>
+</div>
+<textarea id="cameraConfigOutput" rows="8" placeholder="Orbit to your ideal view, then click Show/Copy to export camera position."></textarea>
+
+<hr />
+<b>Attack Timing Controls</b>
+<div style="display:flex; flex-direction:column; gap:14px; margin:8px 0;">
+  
+  <!-- PUNCH -->
+  <div style="background:#1a2332; padding:14px; border-radius:10px; border:1px solid #2d3a52;">
+    <b style="color:#4da6ff">Punch</b><br/>
+    <label>Startup <input id="punchStartup" type="range" min="0.01" max="0.30" step="0.005" value="0.035"><span id="punchStartupValue">0.035s</span></label><br/>
+    <label>Active <input id="punchActive" type="range" min="0.02" max="0.40" step="0.005" value="0.10"><span id="punchActiveValue">0.10s</span></label><br/>
+    <label>Recovery <input id="punchRecovery" type="range" min="0.02" max="0.50" step="0.005" value="0.075"><span id="punchRecoveryValue">0.075s</span></label><br/>
+    <label>Range <input id="punchRange" type="range" min="0.5" max="2.5" step="0.05" value="1.15"><span id="punchRangeValue">1.15</span></label><br/>
+    <label>Push <input id="punchPush" type="range" min="0" max="1.0" step="0.02" value="0.18"><span id="punchPushValue">0.18</span></label><br/>
+    <label>Damage <input id="punchDamage" type="range" min="1" max="30" step="1" value="7"><span id="punchDamageValue">7</span></label>
+  </div>
+  
+  <!-- KICK -->
+  <div style="background:#1a2332; padding:14px; border-radius:10px; border:1px solid #2d3a52;">
+    <b style="color:#ff6b6b">Kick</b><br/>
+    <label>Startup <input id="kickStartup" type="range" min="0.05" max="0.40" step="0.005" value="0.14"><span id="kickStartupValue">0.14s</span></label><br/>
+    <label>Active <input id="kickActive" type="range" min="0.05" max="0.50" step="0.005" value="0.20"><span id="kickActiveValue">0.20s</span></label><br/>
+    <label>Recovery <input id="kickRecovery" type="range" min="0.05" max="0.70" step="0.005" value="0.28"><span id="kickRecoveryValue">0.28s</span></label><br/>
+    <label>Range <input id="kickRange" type="range" min="0.5" max="3.0" step="0.05" value="1.65"><span id="kickRangeValue">1.65</span></label><br/>
+    <label>Push <input id="kickPush" type="range" min="0" max="1.5" step="0.02" value="0.30"><span id="kickPushValue">0.30</span></label><br/>
+    <label>Damage <input id="kickDamage" type="range" min="1" max="40" step="1" value="12"><span id="kickDamageValue">12</span></label>
+  </div>
+  
+  <!-- HEAVY -->
+  <div style="background:#1a2332; padding:14px; border-radius:10px; border:1px solid #2d3a52;">
+    <b style="color:#ffd93d">Heavy</b><br/>
+    <label>Startup <input id="heavyStartup" type="range" min="0.10" max="0.50" step="0.005" value="0.20"><span id="heavyStartupValue">0.20s</span></label><br/>
+    <label>Active <input id="heavyActive" type="range" min="0.05" max="0.60" step="0.005" value="0.24"><span id="heavyActiveValue">0.24s</span></label><br/>
+    <label>Recovery <input id="heavyRecovery" type="range" min="0.10" max="0.80" step="0.005" value="0.40"><span id="heavyRecoveryValue">0.40s</span></label><br/>
+    <label>Range <input id="heavyRange" type="range" min="0.5" max="3.0" step="0.05" value="1.45"><span id="heavyRangeValue">1.45</span></label><br/>
+    <label>Push <input id="heavyPush" type="range" min="0" max="2.0" step="0.02" value="0.40"><span id="heavyPushValue">0.40</span></label><br/>
+    <label>Damage <input id="heavyDamage" type="range" min="1" max="50" step="1" value="16"><span id="heavyDamageValue">16</span></label>
+  </div>
+</div>
+
+<div class="buttonRow">
+  <button id="exportAttackTiming" type="button">Show Timing</button>
+  <button id="copyAttackTiming" type="button">Copy Timing</button>
+</div>
+<div class="buttonRow">
+  <button id="saveAttackTiming" type="button">Save Timing Local</button>
+  <button id="loadAttackTiming" type="button">Load Timing Local</button>
+  <button id="applyAttackTiming" type="button">Apply Timing Text</button>
+</div>
+<textarea id="attackTimingOutput" rows="10" placeholder="Adjust sliders to tune attack feel, then Copy to export frame data."></textarea>
+
     </div>
 
     <div id="help">

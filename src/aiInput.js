@@ -1,43 +1,28 @@
-/**
- * aiInput.js — Improved AI controller
- *
- * Fixes:
- *  - AI no longer spams attacks from far away (checks actual range before attacking)
- *  - Attack cooldown prevents button-mash spam
- *  - Walk-then-attack approach pattern feels natural
- *  - Blocking is reactive to incoming attacks with a delay (human-like)
- *  - Random variation prevents perfectly predictable behaviour
- */
-
 export class AIInput {
   constructor(bindings) {
     this.bindings = bindings;
 
-    // Internal virtual button state
     this._down = new Set();
     this._pressed = new Set();
     this._released = new Set();
 
-    // AI decision state
     this._attackCooldown = 0;
     this._thinkTimer = 0;
-    this._thinkInterval = 0.18; // re-evaluate every 180ms
+    this._thinkInterval = 0.18;
     this._blockReactionDelay = 0;
     this._blockHeld = false;
-    this._currentDecision = null; // 'approach' | 'retreat' | 'attack' | 'block' | 'idle'
+    this._currentDecision = 'idle';
+    this._retreatTimer = 0;
 
-    // Tuning
-    this.ATTACK_RANGE_PUNCH = 1.8;
-    this.ATTACK_RANGE_KICK  = 2.2;
-    this.ATTACK_RANGE_HEAVY = 2.6;
-    this.APPROACH_STOP_DIST = 1.4; // stop walking when this close
-    this.RETREAT_DIST       = 0.6; // retreat if closer than this
-    this.ATTACK_COOLDOWN    = 0.55; // minimum seconds between attacks
-    this.BLOCK_REACTION_MS  = 110;  // ms to react to opponent attacking
-    this.AGGRESSION         = 0.72; // 0–1; higher = attacks more often
+    this.ATTACK_RANGE_PUNCH = 1.18;
+    this.ATTACK_RANGE_KICK = 1.68;
+    this.ATTACK_RANGE_HEAVY = 1.5;
+    this.PREFERRED_MAX_DIST = 2.35;
+    this.RETREAT_DIST = 0.95;
+    this.ATTACK_COOLDOWN = 0.7;
+    this.BLOCK_REACTION_MS = 140;
+    this.AGGRESSION = 0.58;
   }
-
-  // ── Public interface (mirrors KeyboardInput) ──────────────────────────────
 
   isDown(key) { return this._down.has(key); }
   wasPressed(key) { return this._pressed.has(key); }
@@ -48,52 +33,41 @@ export class AIInput {
     this._released.clear();
   }
 
-  // ── Main update — called from game.js before p2.update() ─────────────────
-
   update(dt, self, opponent) {
-    // Clear last frame's pressed state
     const prevDown = new Set(this._down);
     this._down.clear();
 
-    // Tick timers
     if (this._attackCooldown > 0) this._attackCooldown -= dt;
     if (this._blockReactionDelay > 0) this._blockReactionDelay -= dt;
+    if (this._retreatTimer > 0) this._retreatTimer -= dt;
     this._thinkTimer -= dt;
 
     const dx = opponent.group.position.x - self.group.position.x;
     const dist = Math.abs(dx);
     const opponentAttacking = opponent.state === 'attack';
 
-    // ── Block reaction ───────────────────────────────────────────────────────
-    if (opponentAttacking && !this._blockHeld) {
-      // Start block reaction timer if we haven't already
-      if (this._blockReactionDelay <= 0) {
-        this._blockReactionDelay = this.BLOCK_REACTION_MS / 1000;
-      }
+    if (opponentAttacking && !this._blockHeld && this._blockReactionDelay <= 0) {
+      this._blockReactionDelay = this.BLOCK_REACTION_MS / 1000;
     }
     if (!opponentAttacking) {
       this._blockHeld = false;
       this._blockReactionDelay = 0;
     }
-    if (this._blockReactionDelay <= 0 && opponentAttacking && dist < this.ATTACK_RANGE_HEAVY + 0.3) {
+    if (this._blockReactionDelay <= 0 && opponentAttacking && dist < this.ATTACK_RANGE_KICK + 0.35) {
       this._blockHeld = true;
     }
 
-    // ── Re-evaluate decision ─────────────────────────────────────────────────
     if (this._thinkTimer <= 0) {
       this._thinkTimer = this._thinkInterval * (0.8 + Math.random() * 0.4);
       this._currentDecision = this._decide(dist, opponentAttacking, self, opponent);
     }
 
-    // ── Execute decision ─────────────────────────────────────────────────────
     const b = this.bindings;
-    const decision = this._currentDecision;
-
     const towardOpponent = dx > 0 ? b.right : b.left;
     const awayFromOpponent = dx > 0 ? b.left : b.right;
+    const decision = this._currentDecision;
 
-    if (this._blockHeld && opponentAttacking) {
-      // Crouching block
+    if (this._blockHeld || decision === 'block') {
       this._press(b.down);
     } else if (decision === 'approach') {
       this._press(towardOpponent);
@@ -107,11 +81,9 @@ export class AIInput {
       this._attackCooldown = this.ATTACK_COOLDOWN;
     } else if (decision === 'attack_heavy') {
       this._pressOnce(b.heavy);
-      this._attackCooldown = this.ATTACK_COOLDOWN * 1.4;
+      this._attackCooldown = this.ATTACK_COOLDOWN * 1.35;
     }
-    // 'idle' — hold no buttons
 
-    // Compute pressed/released from prev vs current
     for (const key of this._down) {
       if (!prevDown.has(key)) this._pressed.add(key);
     }
@@ -120,54 +92,65 @@ export class AIInput {
     }
   }
 
-  // ── Decision logic ────────────────────────────────────────────────────────
-
   _decide(dist, opponentAttacking, self, opponent) {
-    // Don't attack while on cooldown or while opponent is in hit/ko state
     const canAttack = this._attackCooldown <= 0 && !opponentAttacking && opponent.health > 0;
+    const justGotHit = self.state === 'hit' || self.stun > 0;
 
-    // Too close — back off briefly
-    if (dist < this.RETREAT_DIST) return 'retreat';
+    if (justGotHit) {
+      this._retreatTimer = 0.28 + Math.random() * 0.28;
+      return Math.random() < 0.35 ? 'block' : 'retreat';
+    }
 
-    // In punch range
+    if (this._retreatTimer > 0) return 'retreat';
+
+    if (opponentAttacking && dist <= this.ATTACK_RANGE_KICK + 0.35) {
+      const roll = Math.random();
+      if (roll < 0.62) return 'block';
+      if (roll < 0.88) return 'retreat';
+      return 'idle';
+    }
+
+    if (dist < this.RETREAT_DIST) {
+      this._retreatTimer = 0.18 + Math.random() * 0.28;
+      return Math.random() < 0.8 ? 'retreat' : 'block';
+    }
+
     if (dist <= this.ATTACK_RANGE_PUNCH && canAttack) {
       if (Math.random() < this.AGGRESSION) {
-        // Pick a random attack weighted by range appropriateness
         const r = Math.random();
-        if (r < 0.5) return 'attack_punch';
-        if (r < 0.8) return 'attack_kick';
+        if (r < 0.55) return 'attack_punch';
+        if (r < 0.85) return 'attack_kick';
         return 'attack_heavy';
       }
-      return 'idle'; // sometimes just stand there (makes AI feel human)
+      return Math.random() < 0.45 ? 'retreat' : 'idle';
     }
 
-    // In kick range
     if (dist <= this.ATTACK_RANGE_KICK && canAttack) {
-      if (Math.random() < this.AGGRESSION * 0.8) {
-        return Math.random() < 0.6 ? 'attack_kick' : 'attack_punch';
+      if (Math.random() < this.AGGRESSION * 0.78) {
+        return Math.random() < 0.65 ? 'attack_kick' : 'attack_punch';
       }
-      return 'approach';
+      return Math.random() < 0.3 ? 'retreat' : 'idle';
     }
 
-    // In heavy range
     if (dist <= this.ATTACK_RANGE_HEAVY && canAttack) {
-      if (Math.random() < this.AGGRESSION * 0.5) {
-        return 'attack_heavy';
-      }
+      if (Math.random() < this.AGGRESSION * 0.5) return 'attack_heavy';
+      return Math.random() < 0.45 ? 'approach' : 'idle';
+    }
+
+    if (dist < this.PREFERRED_MAX_DIST) {
+      const roll = Math.random();
+      if (roll < 0.22) return 'retreat';
+      if (roll < 0.62) return 'idle';
       return 'approach';
     }
 
-    // Out of range — walk toward opponent
-    return 'approach';
+    return Math.random() < 0.78 ? 'approach' : 'idle';
   }
-
-  // ── Internal helpers ──────────────────────────────────────────────────────
 
   _press(key) {
     this._down.add(key);
   }
 
-  // pressOnce simulates a button tap (only registers wasPressed for one frame)
   _pressOnce(key) {
     this._down.add(key);
     this._pressed.add(key);

@@ -32,6 +32,16 @@ export class FightingGame {
     this.syncingArenaUi = false;
     this.skyPlane = null;
 
+    // Multi-round match state
+    this.currentRound = 1;
+    this.roundsWon = { p1: 0, p2: 0 };
+    this.matchOver = false;
+    this.roundTransition = { active: false, timer: 0, phase: 'idle', winner: null, resultText: '' };
+
+    // Background GLB model state
+    this.bgModelRoot = null;
+    this.bgModelObject = null;
+
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x87a9c7);
     this.scene.fog = null;
@@ -64,6 +74,7 @@ window.addEventListener('resize', () => this.onResize());
     this.setupBackgroundControls();
     this.setupArenaUpload();
     this.setupArenaSelector();
+    this.setupBgModelControls();
   }
 
   async init() {
@@ -77,6 +88,7 @@ window.addEventListener('resize', () => this.onResize());
       this.assetsReady = true;
       this.showBoot('ALL ASSETS LOADED. Press PLAY to start.', true);
       this.applyDefaultCameraConfig(); 
+      this.updateBgModelSectionVisibility();
 
       console.log('ALL ASSETS LOADED: arena from public/assets/arena + fighters + animations.');
     } catch (err) {
@@ -235,6 +247,7 @@ window.addEventListener('resize', () => this.onResize());
     this.loadedArena = obj;
     this.transformControls.attach(root);
     this.applyArenaDefaultForFile(name.includes('arena.glb') ? 'arena.glb' : name);
+    this.updateBgModelSectionVisibility();
     console.log(`Loaded arena from upload: ${name}`);
   }
 
@@ -500,10 +513,85 @@ applyDefaultCameraConfig() {
     this.loadedArena = obj;
     this.currentArenaFile = fileName;
     this.applyArenaDefaultForFile(fileName);
-    this.applyDefaultCameraConfig(); 
+    this.applyDefaultCameraConfig();
+    this.updateBgModelSectionVisibility();
   }
 
-  setupReplayButton() { const btn = document.getElementById('replayBtn'); if (btn) btn.addEventListener('click', () => this.resetRound()); }
+  // ====== BACKGROUND GLB MODEL ======
+
+  setupBgModelControls() {
+    const input = document.getElementById('bgModelUpload');
+    if (input) input.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      try {
+        await this.loadBgModelFromUrl(url);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    });
+
+    ['bgModelScale','bgModelX','bgModelY','bgModelZ','bgModelRotX','bgModelRotY','bgModelRotZ'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', () => this.applyBgModelSliders());
+    });
+  }
+
+  async loadBgModelFromUrl(url) {
+    const obj = await this.loader.loadObject(url, 'glb');
+    obj.name = 'BackgroundModel';
+    this.prepareArenaModel(obj);
+
+    if (this.bgModelObject) {
+      if (this.bgModelObject.parent) this.bgModelObject.parent.remove(this.bgModelObject);
+    }
+    if (!this.bgModelRoot) {
+      this.bgModelRoot = new THREE.Group();
+      this.bgModelRoot.name = 'BackgroundModelRoot';
+      this.scene.add(this.bgModelRoot);
+    }
+
+    this.bgModelRoot.add(obj);
+    this.bgModelObject = obj;
+    this.applyBgModelSliders();
+    console.log('Loaded background GLB model');
+  }
+
+  applyBgModelSliders() {
+    const obj = this.bgModelObject || this.bgModelRoot;
+    if (!obj) return;
+    const s = this.num('bgModelScale', 1);
+    const x = this.num('bgModelX', 0);
+    const y = this.num('bgModelY', 0);
+    const z = this.num('bgModelZ', 0);
+    const rx = this.num('bgModelRotX', 0);
+    const ry = this.num('bgModelRotY', 0);
+    const rz = this.num('bgModelRotZ', 0);
+    obj.scale.setScalar(s);
+    obj.position.set(x, y, z);
+    obj.rotation.set(THREE.MathUtils.degToRad(rx), THREE.MathUtils.degToRad(ry), THREE.MathUtils.degToRad(rz));
+    this.label('bgModelScaleValue', s.toFixed(3));
+    this.label('bgModelXValue', x.toFixed(2));
+    this.label('bgModelYValue', y.toFixed(2));
+    this.label('bgModelZValue', z.toFixed(2));
+    this.label('bgModelRotXValue', rx.toFixed(1));
+    this.label('bgModelRotYValue', ry.toFixed(1));
+    this.label('bgModelRotZValue', rz.toFixed(1));
+  }
+
+  updateBgModelSectionVisibility() {
+    const section = document.getElementById('bgModelSection');
+    if (!section) return;
+    section.style.display = this.currentArenaFile === 'arena.glb' ? 'block' : 'none';
+  }
+
+  // ====== MATCH / ROUND SYSTEM ======
+
+  setupReplayButton() {
+    const btn = document.getElementById('replayBtn');
+    if (btn) btn.addEventListener('click', () => this.playAgain());
+  }
   setupPlayButton() { const btn = document.getElementById('playBtn'); if (btn) btn.addEventListener('click', () => this.startFight()); }
   startFight() { if (!this.assetsReady) return; this.fightStarted = true; this.hideBoot(); this.clock.getDelta(); }
   showBoot(message, showPlay) { const boot = document.getElementById('boot'); const msg = document.getElementById('bootMessage'); const btn = document.getElementById('playBtn'); if (!boot) return; boot.style.display = 'grid'; if (msg) msg.textContent = message; if (btn) btn.style.display = showPlay ? 'inline-block' : 'none'; }
@@ -527,7 +615,11 @@ applyDefaultCameraConfig() {
     if (!this.fightStarted) { this.p1.play('idle', 0.12); this.p2.play('idle', 0.12); this.p1.mixer?.update(dt); this.p2.mixer?.update(dt); return; }
     this.p1.faceOpponent(this.p2);
     this.p2.faceOpponent(this.p1);
-    if (!this.roundOver) {
+    if (this.roundTransition.active) {
+      this.handleRoundTransition(dt);
+      try { this.p1.update(dt, NEUTRAL_INPUT, this.p2, this.arena); } catch (e) { console.error('P1 update error:', e); }
+      try { this.p2.update(dt, NEUTRAL_INPUT, this.p1, this.arena); } catch (e) { console.error('P2 update error:', e); }
+    } else if (!this.roundOver) {
       this.aiInput.update(dt, this.p2, this.p1);
       try { this.p1.update(dt, this.input, this.p2, this.arena); } catch (e) { console.error('P1 update error:', e); }
       try { this.p2.update(dt, this.aiInput, this.p1, this.arena); } catch (e) { console.error('P2 update error:', e); }
@@ -537,6 +629,136 @@ applyDefaultCameraConfig() {
       try { this.p2.update(dt, NEUTRAL_INPUT, this.p1, this.arena); } catch (e) { console.error('P2 update error:', e); }
     }
     this.updateHud();
+  }
+
+  handleRoundTransition(dt) {
+    this.roundTransition.timer += dt;
+    const roundTextEl = document.getElementById('roundText');
+    if (!roundTextEl) return;
+
+    if (this.roundTransition.phase === 'roundEnd') {
+      roundTextEl.textContent = this.roundTransition.resultText;
+
+      if (this.roundTransition.timer >= 1.5) {
+        this.recordRoundResult(this.roundTransition.winner);
+        if (this.matchOver) {
+          this.showMatchResult();
+        } else {
+          if (this.roundTransition.winner !== null) {
+            this.currentRound++;
+          }
+          this.roundTransition.phase = 'starting';
+          this.roundTransition.timer = 0;
+          roundTextEl.textContent = `ROUND ${this.currentRound}`;
+        }
+      }
+    } else if (this.roundTransition.phase === 'starting') {
+      if (this.roundTransition.timer >= 1.5) {
+        this.resetFighterState();
+        this.roundOver = false;
+        this.roundTransition.active = false;
+        this.roundTransition.phase = 'idle';
+      }
+    } else if (this.roundTransition.phase === 'matchOver') {
+      if (this.roundTransition.timer >= 1.0) {
+        const winnerText = this.roundsWon.p1 > this.roundsWon.p2 ? 'P1 WINS THE MATCH!' : (this.roundsWon.p2 > this.roundsWon.p1 ? 'AI WINS THE MATCH!' : 'DRAW MATCH!');
+        const overlay = document.getElementById('matchWinnerText');
+        if (overlay) {
+          overlay.textContent = winnerText;
+          overlay.style.display = 'block';
+        }
+        const replayBtn = document.getElementById('replayBtn');
+        if (replayBtn) replayBtn.style.display = 'block';
+        this.roundTransition.active = false;
+      }
+    }
+  }
+
+  showMatchResult() {
+    const winnerText = this.roundsWon.p1 > this.roundsWon.p2
+      ? 'P1 WINS THE MATCH!'
+      : (this.roundsWon.p2 > this.roundsWon.p1 ? 'AI WINS THE MATCH!' : 'DRAW MATCH!');
+    const roundTextEl = document.getElementById('roundText');
+    if (roundTextEl) roundTextEl.textContent = winnerText;
+    this.roundTransition.phase = 'matchOver';
+    this.roundTransition.timer = 0;
+  }
+
+  recordRoundResult(winner) {
+    if (winner === 'p1') this.roundsWon.p1++;
+    else if (winner === 'p2') this.roundsWon.p2++;
+    this.updateRoundIndicators();
+
+    if (this.roundsWon.p1 >= 2 || this.roundsWon.p2 >= 2 || this.currentRound >= 3) {
+      this.matchOver = true;
+    }
+  }
+
+  checkRoundOver() {
+    if (this.roundOver || this.roundTransition.active) return;
+    if (!(this.p1.health <= 0 || this.p2.health <= 0)) return;
+
+    this.roundOver = true;
+    const isDraw = this.p1.health <= 0 && this.p2.health <= 0;
+    let winner = null;
+    let resultText = 'DRAW';
+    if (!isDraw) {
+      winner = this.p1.health <= 0 ? 'p2' : 'p1';
+      resultText = winner === 'p1' ? 'P1 WINS' : 'AI WINS';
+    }
+
+    this.roundTransition.active = true;
+    this.roundTransition.phase = 'roundEnd';
+    this.roundTransition.timer = 0;
+    this.roundTransition.winner = winner;
+    this.roundTransition.resultText = resultText;
+  }
+
+  resetFighterState() {
+    if (!this.p1 || !this.p2) return;
+    this.p1.health = 100;
+    this.p2.health = 100;
+    this.p1.koStarted = this.p2.koStarted = false;
+    this.p1.stun = this.p2.stun = 0;
+    this.p1.hitStop = this.p2.hitStop = 0;
+    this.p1.attackKind = null;
+    this.p2.attackKind = null;
+    this.p1.group.position.set(this.num('p1StartX', -2.6), this.num('p1StartY', 0), this.num('p1StartZ', 0));
+    this.p2.group.position.set(this.num('p2StartX', 2.6), this.num('p2StartY', 0), this.num('p2StartZ', 0));
+    this.p1.velocity.set(0, 0, 0);
+    this.p2.velocity.set(0, 0, 0);
+    this.p1.setState('idle');
+    this.p2.setState('idle');
+    this.p1.play('idle', 0.05, true, true);
+    this.p2.play('idle', 0.05, true, true);
+    this.p1.faceOpponent(this.p2);
+    this.p2.faceOpponent(this.p1);
+  }
+
+  playAgain() {
+    if (!this.p1 || !this.p2) return;
+    this.matchOver = false;
+    this.currentRound = 1;
+    this.roundsWon = { p1: 0, p2: 0 };
+    this.roundOver = false;
+    this.roundTransition = { active: false, timer: 0, phase: 'idle', winner: null, resultText: '' };
+
+    this.resetFighterState();
+
+    document.getElementById('roundText').textContent = 'ROUND 1';
+    document.getElementById('replayBtn').style.display = 'none';
+    const overlay = document.getElementById('matchWinnerText');
+    if (overlay) overlay.style.display = 'none';
+    this.updateRoundIndicators();
+    this.updateHud();
+    this.clock.getDelta();
+  }
+
+  updateRoundIndicators() {
+    const p1Dots = document.querySelectorAll('#p1Indicators .roundDot');
+    p1Dots.forEach((dot, i) => dot.classList.toggle('active', i < this.roundsWon.p1));
+    const p2Dots = document.querySelectorAll('#p2Indicators .roundDot');
+    p2Dots.forEach((dot, i) => dot.classList.toggle('active', i < this.roundsWon.p2));
   }
 
   updateHud() {
@@ -551,7 +773,6 @@ applyDefaultCameraConfig() {
       p2Label.textContent = p1OnLeft ? 'AI RIGHT' : 'AI LEFT';
     }
   }
-  checkRoundOver() { if (!(this.p1.health <= 0 || this.p2.health <= 0)) return; const text = document.getElementById('roundText'); this.roundOver = true; text.textContent = this.p1.health <= 0 && this.p2.health <= 0 ? 'DRAW' : (this.p1.health <= 0 ? 'AI WINS' : 'P1 WINS'); const replay = document.getElementById('replayBtn'); if (replay) replay.style.display = 'block'; }
-  resetRound() { if (!this.p1 || !this.p2) return; this.roundOver = false; this.p1.health = 100; this.p2.health = 100; this.p1.koStarted = this.p2.koStarted = false; this.p1.stun = this.p2.stun = 0; this.p1.hitStop = this.p2.hitStop = 0; this.p1.group.position.set(this.num('p1StartX', -2.6), this.num('p1StartY', 0), this.num('p1StartZ', 0)); this.p2.group.position.set(this.num('p2StartX', 2.6), this.num('p2StartY', 0), this.num('p2StartZ', 0)); this.p1.velocity.set(0, 0, 0); this.p2.velocity.set(0, 0, 0); this.p1.setState('idle'); this.p2.setState('idle'); this.p1.play('idle', 0.05, true, true); this.p2.play('idle', 0.05, true, true); this.p1.faceOpponent(this.p2); this.p2.faceOpponent(this.p1); document.getElementById('roundText').textContent = 'ROUND 1'; document.getElementById('replayBtn').style.display = 'none'; this.updateHud(); }
+
   onResize() { this.camera.aspect = window.innerWidth / window.innerHeight; this.camera.updateProjectionMatrix(); this.renderer.setSize(window.innerWidth, window.innerHeight); }
 }

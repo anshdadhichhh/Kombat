@@ -15,8 +15,9 @@ canvas { display: block; }
   right: 24px;
   display: grid;
   grid-template-columns: 1fr 160px 1fr;
+  grid-template-rows: auto auto;
   align-items: center;
-  gap: 18px;
+  gap: 6px 18px;
   z-index: 10;
   pointer-events: none;
   text-shadow: 0 2px 4px #000;
@@ -109,3 +110,46 @@ canvas { display: block; }
   box-shadow: 0 8px 30px rgba(0,0,0,.45);
 }
 #replayBtn:hover, #playBtn:hover { filter: brightness(1.08); }
+
+.roundIndicators {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-start;
+  padding-top: 4px;
+}
+#p2Indicators {
+  justify-content: flex-end;
+}
+.roundDot {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.7);
+  border-radius: 3px;
+  background: rgba(0,0,0,0.5);
+  transition: background 0.3s, border-color 0.3s;
+}
+.roundDot.active {
+  background: #16f27e;
+  border-color: #fff;
+  box-shadow: 0 0 8px rgba(22,242,126,0.6);
+}
+#p2Indicators .roundDot.active {
+  background: #ff374f;
+  border-color: #fff;
+  box-shadow: 0 0 8px rgba(255,55,79,0.6);
+}
+#matchWinnerText {
+  position: fixed;
+  left: 50%;
+  top: 48%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  font-size: 52px;
+  font-weight: 900;
+  color: #ffd93d;
+  text-shadow: 0 4px 20px rgba(0,0,0,0.8), 0 0 40px rgba(255,217,61,0.3);
+  pointer-events: none;
+  display: none;
+  text-align: center;
+  line-height: 1.2;
+}
